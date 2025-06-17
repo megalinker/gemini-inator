@@ -1,0 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;700&family=Inter:wght@400;500;700&display=swap');
+
+@import "tailwindcss";
+
+body {
+    background-color: #242a38;
+    /* Matches doof-bg */
+    background-image:
+        linear-gradient(rgba(81, 93, 125, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(81, 93, 125, 0.1) 1px, transparent 1px);
+    background-size: 2rem 2rem;
+}
