@@ -90,6 +90,27 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Markdown': (path: string) => path.toLowerCase().endsWith('.md'),
   'Compressed Files': (path: string) => ['.rar', '.zip'].some(ext => path.toLowerCase().endsWith(ext)),
   'Image Files': (path: string) => ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'].some(ext => path.toLowerCase().endsWith(ext)),
+  'Next.js Build (.next/out)': (p) =>
+    p === '.next' || p.startsWith('.next/') || // Next.js build output
+    p === 'out' || p.startsWith('out/'),     // `next export` output
+
+  'Vercel & Turbo Caches': (p) =>
+    p === '.vercel' || p.startsWith('.vercel/') || // Vercel CLI project metadata
+    p === '.turbo' || p.startsWith('.turbo/'),    // Turborepo local cache
+
+  // pnpm artifacts
+  'pnpm Store/Artifacts': (p) =>
+    p === '.pnpm' || p.startsWith('.pnpm/') ||                    // sometimes present
+    p.startsWith('node_modules/.pnpm/') ||                        // pnpm’s content-addressed store in project
+    p.endsWith('pnpm-debug.log'),
+
+  // Optional: pnpm config/lock files (useful to exclude from the *combined text*;
+  // note: pnpm docs recommend committing pnpm-lock.yaml to git)
+  'pnpm Lock & Workspace': (p) =>
+    p.endsWith('pnpm-lock.yaml') || p.endsWith('pnpm-workspace.yaml'),
+
+  // GitHub repo meta / CI
+  'GitHub (.github)': (p) => p === '.github' || p.startsWith('.github/'),
 };
 
 
