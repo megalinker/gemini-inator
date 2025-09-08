@@ -21,9 +21,13 @@ import xml from 'react-syntax-highlighter/dist/esm/languages/prism/xml-doc';
 import c from 'react-syntax-highlighter/dist/esm/languages/prism/c';
 import cpp from 'react-syntax-highlighter/dist/esm/languages/prism/cpp';
 import qml from 'react-syntax-highlighter/dist/esm/languages/prism/qml';
+import java from 'react-syntax-highlighter/dist/esm/languages/prism/java';
+import kotlin from 'react-syntax-highlighter/dist/esm/languages/prism/kotlin';
+import protobuf from 'react-syntax-highlighter/dist/esm/languages/prism/protobuf';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
-const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml };
+// Register all the languages for my brilliant syntax highlighter
+const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf };
 Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
@@ -76,6 +80,10 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Dist/Build': (path: string) => ['dist', 'build'].some(dir => path === dir || path.startsWith(`${dir}/`)),
   'Git Files': (path: string) => (path === '.git' || path.startsWith('.git/')) || path.endsWith('.gitignore'),
   'VSCode Config': (path: string) => path === '.vscode' || path.startsWith('.vscode/'),
+  'Android Studio': (path: string) => {
+    const androidExclusions = ['.idea', 'gradle/', 'gradlew', 'gradlew.bat', 'local.properties'];
+    return androidExclusions.some(p => path === p || path.startsWith(`${p}/`));
+  },
   'DFINITY/ICP': (path: string) => (path === '.dfx' || path.startsWith('.dfx/')) || (path === '.mops' || path.startsWith('.mops/')) || path.endsWith('dfx.json') || path.endsWith('canister_ids.json') || path.endsWith('mops.toml'),
   'JS/TS Config': (path: string) => (path === 'public' || path.startsWith('public/')) || path.endsWith('package.json') || path.endsWith('tsconfig.json') || path.endsWith('vite.config.ts') || path.includes('.env'),
   'Lock Files': (path: string) => path.endsWith('package-lock.json') || path.endsWith('yarn.lock'),
@@ -86,6 +94,14 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
 
 
 // --- HELPER FUNCTIONS ---
+
+const hasOverrideUnder = (dirPath: string, overrides: Set<string>) => {
+  const prefix = dirPath ? dirPath + '/' : '';
+  for (const id of overrides) {
+    if (id === dirPath || id.startsWith(prefix)) return true;
+  }
+  return false;
+};
 
 /**
  * Recursively finds a file system entry by its ID within a tree structure.
@@ -127,17 +143,30 @@ const processDirectoryLevel = async (directoryHandle: FileSystemDirectoryHandle,
 
 /**
  * Lazily loads children for a specific directory and inserts them into the tree.
+ * This corrected version ensures that child selection state is set correctly
+ * based on the parent's state, preventing selection corruption upon expansion.
  */
-const loadAndInsertChildren = async (baseTree: FileSystemEntry[], id: string, activeFilters: Set<string>): Promise<FileSystemEntry[]> => {
+const loadAndInsertChildren = async (
+  baseTree: FileSystemEntry[],
+  id: string,
+  activeFilters: Set<string>,
+  includeOverrides: Set<string>
+): Promise<FileSystemEntry[]> => {
   const entryToLoad = findEntry(baseTree, id);
   if (!entryToLoad || entryToLoad.kind !== 'directory') return baseTree;
 
   const rawChildren = await processDirectoryLevel(entryToLoad.handle as FileSystemDirectoryHandle, entryToLoad.path);
   const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
-  const processedChildren = rawChildren.map(child => ({
-    ...child,
-    selected: !filterFns.some(fn => fn(child.path)),
-  }));
+
+  const processedChildren = rawChildren.map(child => {
+    const isFiltered = filterFns.some(fn => fn(child.path));
+    const parentFullySelected = entryToLoad.selected && !entryToLoad.indeterminate;
+    const overridden = includeOverrides.has(child.id);
+    return {
+      ...child,
+      selected: overridden ? true : (parentFullySelected && !isFiltered),
+    };
+  });
 
   const buildNewTree = (nodes: FileSystemEntry[]): FileSystemEntry[] => {
     return nodes.map(node => {
@@ -153,49 +182,101 @@ const loadAndInsertChildren = async (baseTree: FileSystemEntry[], id: string, ac
   return buildNewTree(baseTree);
 };
 
+
 /**
  * Recursively applies active filters to the tree, updating selection states.
  * It cleverly preserves the `isOpen` state of directories.
  */
-const applyFiltersAndPreserveOpenState = (nodes: FileSystemEntry[], activeFilters: Set<string>): FileSystemEntry[] => {
+const applyFiltersAndPreserveOpenState = (
+  nodes: FileSystemEntry[],
+  activeFilters: Set<string>,
+  includeOverrides: Set<string>
+): FileSystemEntry[] => {
   const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
   const hasActiveFilters = activeFilters.size > 0;
 
+  const isPathFiltered = (p: string) => filterFns.some(fn => fn(p));
+
   const recurse = (entries: FileSystemEntry[]): FileSystemEntry[] => {
     return entries.map(entry => {
+      const wasSelected = !!entry.selected;
+      const wasIndeterminate = !!entry.indeterminate;
+      const isFilteredHere = isPathFiltered(entry.path);
+
+      // --- DIRECTORIES ---
       if (entry.kind === 'directory') {
-        if (filterFns.some(fn => fn(entry.path))) {
+        // If the directory itself is filtered (e.g., node_modules) and there's no override under it, unselect it.
+        if (isFilteredHere && !hasOverrideUnder(entry.path, includeOverrides)) {
           return { ...entry, selected: false, indeterminate: false };
         }
+
         if (entry.children) {
           const newChildren = recurse(entry.children);
-          const selectedChildrenCount = newChildren.filter(c => c.selected || c.indeterminate).length;
-          let newSelected = false;
+
+          const selectedOrIndeterminate = newChildren.filter(c => c.selected || c.indeterminate).length;
+          const allFullySelected =
+            newChildren.length > 0 && newChildren.every(c => c.selected && !c.indeterminate);
+
+          // Preserve the user's folder selection; compute only the visual indeterminate.
+          let newSelected = wasSelected;
           let newIndeterminate = false;
 
-          if (selectedChildrenCount === 0) {
-            // No children selected
-          } else if (selectedChildrenCount === newChildren.length && newChildren.every(c => c.selected && !c.indeterminate)) {
-            newSelected = true; // All children fully selected
+          if (newChildren.length === 0) {
+            // No visible children after filters. If the user had selected this folder,
+            // show "indeterminate" to indicate hidden (filtered) content.
+            newIndeterminate = hasActiveFilters && wasSelected;
+          } else if (allFullySelected) {
+            // All visible children fully selected
+            newIndeterminate = false;
+          } else if (selectedOrIndeterminate > 0) {
+            // Some visible children selected/indeterminate
+            newIndeterminate = true;
           } else {
-            newIndeterminate = true; // Some children selected
+            // No visible children selected. If user had it selected and filters are active,
+            // keep it selected but indeterminate to avoid "auto-unchecking" the folder.
+            newIndeterminate = hasActiveFilters && wasSelected;
           }
+
           return { ...entry, children: newChildren, selected: newSelected, indeterminate: newIndeterminate };
         }
-        // For unloaded directories, mark as indeterminate if filters are active
-        return { ...entry, selected: !hasActiveFilters, indeterminate: hasActiveFilters };
+
+        // Unloaded directory (no children loaded yet).
+        // Do NOT auto-uncheck just because filters are active.
+        // Keep user's selection, and if filters are active and it’s selected, show indeterminate.
+        return {
+          ...entry,
+          selected: wasSelected,
+          indeterminate: hasActiveFilters && wasSelected,
+        };
       }
-      // For files, just check if it's excluded
-      return { ...entry, selected: !filterFns.some(fn => fn(entry.path)) };
+
+      // --- FILES ---
+      // Manual override always wins.
+      if (includeOverrides.has(entry.id)) {
+        return { ...entry, selected: true, indeterminate: false };
+      }
+
+      // For filtered files, don't include them in selection,
+      // but don't mutate parent selection logic beyond this point.
+      if (isFilteredHere) {
+        return { ...entry, selected: false, indeterminate: false };
+      }
+
+      // Otherwise, file is selectable as usual.
+      return { ...entry, selected: true, indeterminate: false };
     });
   };
+
   return recurse(nodes);
 };
+
 
 /**
  * Updates the selection state of an entry and all its children, then corrects parent states up the tree.
  */
 const updateSelectionRecursive = (nodes: FileSystemEntry[], id: string, selected: boolean): FileSystemEntry[] => {
+  // First, propagate the user's click downwards.
+  // If a parent is checked, all children are checked. If unchecked, all are unchecked.
   const updateChildren = (entries: FileSystemEntry[]): FileSystemEntry[] => {
     return entries.map(entry => {
       if (entry.id === id) {
@@ -219,29 +300,48 @@ const updateSelectionRecursive = (nodes: FileSystemEntry[], id: string, selected
     });
   };
 
-  // Recalculate the state of parent directories based on their children's states
+  const treeWithUpdatedChildren = updateChildren(nodes);
+
+  // Second, bubble up from the bottom to correct the state of all parent directories.
   const correctParentStates = (entries: FileSystemEntry[]): FileSystemEntry[] => {
     return entries.map(entry => {
-      if (entry.kind !== 'directory' || !entry.children) return entry;
+      // We only care about directories with loaded children.
+      if (entry.kind !== 'directory' || !entry.children) {
+        return entry;
+      }
 
+      // First, ensure all children have their correct states.
       const newChildren = correctParentStates(entry.children);
-      const selectedChildren = newChildren.filter(child => child.selected).length;
-      let newSelected = entry.selected;
+
+      // We now correctly check for both selected and indeterminate children.
+      const fullySelectedChildren = newChildren.filter(c => c.selected && !c.indeterminate).length;
+      const partiallySelectedChildren = newChildren.filter(c => c.indeterminate).length;
+      const totalSelectedDescendants = fullySelectedChildren + partiallySelectedChildren;
+
+      let newSelected = false;
       let newIndeterminate = false;
 
-      if (selectedChildren === 0) {
+      if (totalSelectedDescendants === 0) {
+        // CASE 1: No children are selected or indeterminate. This parent is fully deselected.
         newSelected = false;
-      } else if (selectedChildren === newChildren.length && newChildren.every(c => !c.indeterminate)) {
+        newIndeterminate = false;
+      } else if (fullySelectedChildren === newChildren.length) {
+        // CASE 2: All children are fully selected. This parent is also fully selected.
         newSelected = true;
+        newIndeterminate = false;
       } else {
+        // CASE 3: Any other combination (some selected, some not; some indeterminate).
+        // This parent must be in an indeterminate state.
         newSelected = false;
         newIndeterminate = true;
       }
+
       return { ...entry, children: newChildren, selected: newSelected, indeterminate: newIndeterminate };
     });
   };
 
-  return correctParentStates(updateChildren(nodes));
+  // Run the correction process on the whole tree.
+  return correctParentStates(treeWithUpdatedChildren);
 };
 
 /**
@@ -268,7 +368,7 @@ const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsuppo
 
   const codeExtensions = [
     'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'py', 'rs', 'xml',
-    'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt'
+    'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move'
   ];
 
   if (codeExtensions.includes(extension)) return 'code';
@@ -299,6 +399,10 @@ const getLanguageForPreview = (filename: string): string => {
     case 'json': return 'json';
     case 'xml': case 'qrc': return 'xml';
     case 'jsx': case 'tsx': return 'jsx';
+    case 'java': return 'java';
+    case 'kt': case 'kts': return 'kotlin';
+    case 'proto': return 'protobuf';
+    case 'move': return 'rust'; // Using Rust for approximate highlighting
     case 'txt':
     default: return 'plaintext';
   }
@@ -802,6 +906,22 @@ const WorkAreaPanel: React.FC<WorkAreaPanelProps> = ({ openTabs, activeTabId, on
   );
 };
 
+/**
+ * Checks if a path is excluded by any of the active filters and returns the name of the filter.
+ * @param path The file or directory path to check.
+ * @param activeFilters The set of currently active filter names.
+ * @returns The name of the matching filter, or null if not excluded.
+ */
+const getExclusionReason = (path: string, activeFilters: Set<string>): string | null => {
+  for (const filterName of activeFilters) {
+    const filterFn = COMMON_EXCLUSIONS[filterName];
+    if (filterFn && filterFn(path)) {
+      return filterName; // Return the name of the first matching filter
+    }
+  }
+  return null; // Not excluded by any active filter
+};
+
 export default function App() {
 
   // --- STATE MANAGEMENT ---
@@ -820,6 +940,7 @@ export default function App() {
   const [openTabs, setOpenTabs] = useState<FileSystemEntry[]>([]);
   const [activeTabId, setActiveTabId] = useState<TabId>('output');
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+  const [includeOverrides, setIncludeOverrides] = useState<Set<string>>(new Set());
 
   // Load active filters from localStorage on initial render.
   const [activeFilters, setActiveFilters] = useState<Set<string>>(() => {
@@ -844,7 +965,7 @@ export default function App() {
       setInitialFileTree([]);
       setProcessedFileTree([]);
       setIsLoading(true);
-
+      setIncludeOverrides(new Set());
       setDirectoryName(directoryHandle.name);
       const tree = await processDirectoryLevel(directoryHandle);
       setInitialFileTree(tree); // This triggers the useEffect to process and filter the tree
@@ -873,10 +994,12 @@ export default function App() {
   // Re-apply filters to the tree whenever the active filters change.
   useEffect(() => {
     if (initialFileTree.length > 0) {
-      const newlyProcessedTree = applyFiltersAndPreserveOpenState(initialFileTree, activeFilters);
+      const newlyProcessedTree = applyFiltersAndPreserveOpenState(initialFileTree, activeFilters, includeOverrides);
       setProcessedFileTree(newlyProcessedTree);
     }
+    // Don't add includeOverrides to deps to avoid wiping manual non-override selections
   }, [activeFilters, initialFileTree]);
+
 
   // --- EVENT HANDLERS ---
 
@@ -925,7 +1048,19 @@ export default function App() {
 
   const handleToggleSelection = useCallback((id: string, selected: boolean) => {
     setProcessedFileTree(currentTree => updateSelectionRecursive(currentTree, id, selected));
-  }, []);
+
+    // Record overrides only when the user clicks a FILE checkbox.
+    const entry = findEntry(processedFileTree, id);
+    if (entry && entry.kind === 'file') {
+      setIncludeOverrides(prev => {
+        const next = new Set(prev);
+        if (selected) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
+  }, [processedFileTree]);
+
 
   const handleToggleAll = useCallback((isOpen: boolean) => {
     setProcessedFileTree(currentTree => toggleAllFolders(currentTree, isOpen));
@@ -949,7 +1084,7 @@ export default function App() {
 
     const needsToLoad = entryToToggle.kind === 'directory' && entryToToggle.children === undefined;
 
-    // First, update the tree to show the loading spinner or new open state immediately.
+    // This part, which shows the spinner, is fine.
     const buildNewTree = (nodes: FileSystemEntry[]): FileSystemEntry[] => {
       return nodes.map(entry => {
         if (entry.id === id) {
@@ -964,10 +1099,9 @@ export default function App() {
     const treeWithSpinner = buildNewTree(processedFileTree);
     setProcessedFileTree(treeWithSpinner);
 
-    // If children need to be loaded, fetch them and then update the tree again.
     if (needsToLoad) {
-      loadAndInsertChildren(treeWithSpinner, id, activeFilters)
-        .then(finalTree => setProcessedFileTree(applyFiltersAndPreserveOpenState(finalTree, activeFilters)))
+      loadAndInsertChildren(treeWithSpinner, id, activeFilters, includeOverrides)
+        .then(finalTree => setProcessedFileTree(finalTree))
         .catch(err => console.error("Failed to load directory children:", err));
     }
   }, [processedFileTree, activeFilters]);
@@ -996,74 +1130,199 @@ export default function App() {
     setOpenTabs(currentTabs => currentTabs.filter(tab => tab.id !== tabIdToClose));
   }, [openTabs, activeTabId]);
 
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-    setGeneratedText('');
-    setCopySuccess(false);
-    let output = '';
-    const filesToProcess: { path: string, handle: FileSystemFileHandle }[] = [];
+  /**
+ * Recursively builds a complete in-memory representation of the file tree,
+ * loading any un-expanded directories that are selected or indeterminate.
+ * This is the new, robust "pre-computation" step.
+ */
+  const buildCompleteTree = async (
+    nodes: FileSystemEntry[],
+    activeFilters: Set<string>,
+    includeOverrides: Set<string>
+  ): Promise<FileSystemEntry[]> => {
+    const newNodes: FileSystemEntry[] = [];
     const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
 
-    const collectFilesRecursively = async (entries: FileSystemEntry[]) => {
-      for (const entry of entries) {
-        if (entry.kind === 'file' && entry.selected) {
-          if (getPreviewType(entry.name) === 'code') {
-            filesToProcess.push({ path: entry.path, handle: entry.handle as FileSystemFileHandle });
-          }
-        } else if (entry.kind === 'directory' && (entry.selected || entry.indeterminate)) {
-          let childrenToProcess = entry.children;
+    for (const node of nodes) {
+      const isFiltered = filterFns.some(fn => fn(node.path));
 
-          // If a directory is selected but its children haven't been loaded yet, load them now.
-          if (!childrenToProcess) {
-            try {
-              const rawChildren = await processDirectoryLevel(entry.handle as FileSystemDirectoryHandle, entry.path);
-              childrenToProcess = rawChildren.map(child => ({
-                ...child,
-                selected: !filterFns.some(fn => fn(child.path)),
-              }));
-            } catch (err) {
-              output += `//--- My Evil Directory: ${entry.path} ---\n\n--- ERROR: CURSE YOU, PERRY THE PLATYPUS! I COULDN'T READ THIS DIRECTORY! ---\n\n`;
-              continue;
-            }
-          }
-          if (childrenToProcess) {
-            await collectFilesRecursively(childrenToProcess);
-          }
-        }
+      if (node.kind === 'file') {
+        // Skip only if filtered AND not manually overridden
+        if (isFiltered && !includeOverrides.has(node.id)) continue;
+        newNodes.push(node);
+        continue;
       }
-    };
 
-    await collectFilesRecursively(processedFileTree);
+      // Directories
+      const dirHasOverride = hasOverrideUnder(node.path, includeOverrides);
+      const skipDir = isFiltered && !dirHasOverride;
 
-    for (const fileInfo of filesToProcess) {
-      try {
-        const file = await fileInfo.handle.getFile();
-        const content = await file.text();
-        output += `//--- File: ${fileInfo.path} ---\n\n${content}\n\n`;
-      } catch (err) {
-        output += `//--- File: ${fileInfo.path} ---\n\n--- ERROR: CURSE YOU, PERRY THE PLATYPUS! I COULDN'T READ THIS FILE! ---\n\n`;
+      if (skipDir) {
+        // fully filtered and no overridden descendants
+        continue;
+      }
+
+      const mustTraverse =
+        dirHasOverride || node.selected || node.indeterminate;
+
+      if (mustTraverse && node.children === undefined) {
+        try {
+          const rawChildren = await processDirectoryLevel(node.handle as FileSystemDirectoryHandle, node.path);
+          const expandedChildren = await buildCompleteTree(rawChildren, activeFilters, includeOverrides);
+          newNodes.push({ ...node, children: expandedChildren });
+        } catch {
+          newNodes.push({ ...node, children: [] });
+        }
+      } else if (node.children) {
+        const expandedChildren = await buildCompleteTree(node.children, activeFilters, includeOverrides);
+        newNodes.push({ ...node, children: expandedChildren });
+      } else {
+        newNodes.push(node);
       }
     }
-
-    setGeneratedText(output);
-    setIsGenerating(false);
+    return newNodes;
   };
 
-  const handleCopy = async () => {
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setGeneratedText('Phase 1: Analyzing all evil plans (this may take a moment for large folders)...');
+    setCopySuccess(false);
+
+    try {
+      const completeTree = await buildCompleteTree(processedFileTree, activeFilters, includeOverrides);
+
+      // --- Recursive logging function ---
+      const logInclusionStatus = (nodes: FileSystemEntry[], indent = '') => {
+        for (const node of nodes) {
+          const exclusionReason = getExclusionReason(node.path, activeFilters);
+
+          if (node.kind === 'file') {
+            const isCode = getPreviewType(node.name) === 'code';
+            const isIncluded = node.selected && isCode && !exclusionReason;
+
+            if (isIncluded) {
+            } else {
+              let reason = "Unknown";
+              if (exclusionReason) reason = `Filtered by '${exclusionReason}'`;
+              else if (!isCode) reason = "Not a code file";
+              else if (!node.selected) reason = "Manually deselected in UI";
+            }
+          } else if (node.kind === 'directory') {
+            const isTraversing = (node.selected || node.indeterminate) && !exclusionReason;
+            if (isTraversing) {
+              if (node.children) {
+                logInclusionStatus(node.children, indent + '  ');
+              }
+            } else {
+              let reason = "Manually deselected in UI";
+              if (exclusionReason) reason = `Filtered by '${exclusionReason}'`;
+            }
+          }
+        }
+      };
+      logInclusionStatus(completeTree);
+      // --- End of new logging logic ---
+
+
+      // The rest of the function remains the same, but now it operates on the fully logged tree.
+      setGeneratedText('Phase 2: Gathering all the necessary gizmos and schematics...');
+      const filesToProcess: { path: string, handle: FileSystemFileHandle }[] = [];
+
+      const collect = (nodes: FileSystemEntry[]) => {
+        for (const node of nodes) {
+          if (node.kind === 'file' && node.selected && getPreviewType(node.name) === 'code') {
+            filesToProcess.push({ path: node.path, handle: node.handle as FileSystemFileHandle });
+          }
+          if (node.kind === 'directory' && node.children && (node.selected || node.indeterminate)) {
+            collect(node.children);
+          }
+        }
+      };
+      collect(completeTree);
+
+      if (filesToProcess.length === 0) {
+        setGeneratedText("// My evil scheme resulted in... nothing! Curses!\n// No code files were found based on the current selections and filters.\n// Check the developer console (F12) for a detailed log of why files were skipped.");
+        setIsGenerating(false);
+        console.groupEnd(); // Make sure to end the group here too
+        return;
+      }
+
+      setGeneratedText(`Phase 3: Firing the Gemini-Inator! Combining ${filesToProcess.length} files...`);
+      let output = '';
+      for (const fileInfo of filesToProcess) {
+        try {
+          const file = await fileInfo.handle.getFile();
+          const content = await file.text();
+          output += `//--- File: ${fileInfo.path} ---\n\n${content}\n\n`;
+        } catch (err: any) {
+          output += `//--- File: ${fileInfo.path} ---\n\n--- ERROR: CURSE YOU, PERRY THE PLATYPUS! I COULDN'T READ THIS FILE! (${err.message}) ---\n\n`;
+        }
+      }
+      setGeneratedText(output);
+
+    } catch (err: any) {
+      setGeneratedText(`// A catastrophic failure has occurred! My evil scheme is in shambles!\n// ${err.message}`);
+      console.error("Error during generation:", err);
+    } finally {
+      console.groupEnd(); // Always close the console group
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopy = () => {
     const parts = [];
     if (promptPrefix) parts.push(promptPrefix);
     if (generatedText) parts.push(generatedText);
     if (promptSuffix) parts.push(promptSuffix);
     const textToCopy = parts.join('\n\n');
 
-    if (!textToCopy || !navigator.clipboard) return;
+    if (!textToCopy) return;
 
+    // We know the modern API fails for large text, so we go straight to the
+    // classic method. The key is to make this entire operation as synchronous
+    // as possible to satisfy browser security policies.
+
+    const textArea = document.createElement('textarea');
+    textArea.value = textToCopy;
+
+    // Style the textarea to be invisible but still part of the DOM
+    textArea.style.position = 'fixed';
+    textArea.style.top = '-9999px';
+    textArea.style.left = '-9999px';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    let successful = false;
     try {
-      await navigator.clipboard.writeText(textToCopy);
+      // This is the critical moment. We call execCommand synchronously.
+      successful = document.execCommand('copy');
+    } catch (err) {
+      console.error('An exception occurred during the copy command:', err);
+      // Ensure 'successful' is false if an error is thrown.
+      successful = false;
+    } finally {
+      // Crucially, we clean up the textarea immediately, regardless of success.
+      document.body.removeChild(textArea);
+    }
+
+    // ONLY AFTER the browser-sensitive operation is completely finished,
+    // do we trigger any React state updates.
+    if (successful) {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
-    } catch (err) {
-      setError("My evil plans have been foiled! I could not copy the text.");
+    } else {
+      // If even this fails, the browser's restrictions are too great.
+      setError("My ultimate scheme... copying... has been foiled! The browser blocked the copy command. This can sometimes be fixed by a page refresh.");
+      console.error('Fallback copy method failed. This is likely a browser security restriction.');
     }
   };
 
