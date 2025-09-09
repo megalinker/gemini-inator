@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-
+import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
 import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
@@ -27,7 +27,7 @@ import protobuf from 'react-syntax-highlighter/dist/esm/languages/prism/protobuf
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 // Register all the languages for my brilliant syntax highlighter
-const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf };
+const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql };
 Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
@@ -111,6 +111,12 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
 
   // GitHub repo meta / CI
   'GitHub (.github)': (p) => p === '.github' || p.startsWith('.github/'),
+
+  'Cloudflare Wrangler': (p) =>
+    p === '.wrangler' || p.startsWith('.wrangler/') ||  // local state dir
+    p.endsWith('wrangler.toml') ||                      // config file (works in monorepos too)
+    p.endsWith('wrangler.json') ||                      // rarely used alt config
+    p.endsWith('.dev.vars'),                            // local env for `wrangler dev`
 };
 
 
@@ -389,7 +395,7 @@ const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsuppo
 
   const codeExtensions = [
     'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'py', 'rs', 'xml',
-    'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move'
+    'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql'
   ];
 
   if (codeExtensions.includes(extension)) return 'code';
@@ -423,7 +429,8 @@ const getLanguageForPreview = (filename: string): string => {
     case 'java': return 'java';
     case 'kt': case 'kts': return 'kotlin';
     case 'proto': return 'protobuf';
-    case 'move': return 'rust'; // Using Rust for approximate highlighting
+    case 'move': return 'rust';
+    case 'sql': return 'sql';
     case 'txt':
     default: return 'plaintext';
   }

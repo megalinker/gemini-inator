@@ -17,3 +17,4 @@ declare module 'react-syntax-highlighter/dist/esm/languages/prism/xml-doc';
 declare module 'react-syntax-highlighter/dist/esm/languages/prism/c';
 declare module 'react-syntax-highlighter/dist/esm/languages/prism/cpp';
 declare module 'react-syntax-highlighter/dist/esm/languages/prism/qml';
+declare module 'react-syntax-highlighter/dist/esm/languages/prism/sql';
