@@ -18,3 +18,4 @@ declare module 'react-syntax-highlighter/dist/esm/languages/prism/c';
 declare module 'react-syntax-highlighter/dist/esm/languages/prism/cpp';
 declare module 'react-syntax-highlighter/dist/esm/languages/prism/qml';
 declare module 'react-syntax-highlighter/dist/esm/languages/prism/sql';
+declare module 'react-syntax-highlighter/dist/esm/languages/prism/bash';

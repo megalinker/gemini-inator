@@ -24,10 +24,12 @@ import qml from 'react-syntax-highlighter/dist/esm/languages/prism/qml';
 import java from 'react-syntax-highlighter/dist/esm/languages/prism/java';
 import kotlin from 'react-syntax-highlighter/dist/esm/languages/prism/kotlin';
 import protobuf from 'react-syntax-highlighter/dist/esm/languages/prism/protobuf';
+import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
 // Register all the languages for my brilliant syntax highlighter
-const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql };
+const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql, yaml, };
 Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
@@ -117,6 +119,15 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
     p.endsWith('wrangler.toml') ||                      // config file (works in monorepos too)
     p.endsWith('wrangler.json') ||                      // rarely used alt config
     p.endsWith('.dev.vars'),                            // local env for `wrangler dev`
+
+  'JSON Files': (p: string) => p.toLowerCase().endsWith('.json'),
+
+  // NEW: ignore Husky hooks/config
+  'Husky Hooks': (p: string) =>
+    p === '.husky' || p.startsWith('.husky/') ||
+    p.endsWith('.huskyrc') ||
+    p.endsWith('.huskyrc.js') || p.endsWith('.huskyrc.cjs') ||
+    p.endsWith('.huskyrc.json') || p.endsWith('.huskyrc.ts'),
 };
 
 
@@ -394,8 +405,7 @@ const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsuppo
   const extension = filename.split('.').pop()?.toLowerCase() || '';
 
   const codeExtensions = [
-    'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'py', 'rs', 'xml',
-    'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql'
+    'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'mdx', 'py', 'rs', 'xml', 'prisma', 'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql', 'yaml', 'yml', 'lock', 'sum', 'sh',
   ];
 
   if (codeExtensions.includes(extension)) return 'code';
@@ -411,6 +421,7 @@ const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsuppo
 const getLanguageForPreview = (filename: string): string => {
   const extension = filename.split('.').pop()?.toLowerCase() || '';
   switch (extension) {
+    case 'sh': return 'bash';
     case 'js': return 'javascript';
     case 'ts': return 'typescript';
     case 'py': return 'python';
@@ -420,6 +431,7 @@ const getLanguageForPreview = (filename: string): string => {
     case 'qml': return 'qml';
     case 'mo': return 'motoko';
     case 'md': return 'markdown';
+    case 'mdx': return 'jsx';
     case 'css': return 'css';
     case 'scss': return 'scss';
     case 'html': return 'html';
@@ -431,6 +443,9 @@ const getLanguageForPreview = (filename: string): string => {
     case 'proto': return 'protobuf';
     case 'move': return 'rust';
     case 'sql': return 'sql';
+    case 'yaml': case 'yml': return 'yaml';
+    case 'lock': return 'plaintext';
+    case 'sum': return 'plaintext';
     case 'txt':
     default: return 'plaintext';
   }
