@@ -2,10 +2,11 @@ import React, { useState, useCallback, useMemo, useRef, useEffect, ReactNode } f
 import {
   LucideFolder, LucideX, LucideFile, LucideChevronDown, LucideChevronRight,
   LucideCopy, LucideLoader2, LucideSearch, LucideChevronsRight, LucideChevronsLeft,
-  LucideFolderOpen, LucideZap
+  LucideFolderOpen, LucideZap, LucideCode2, LucideSettings, LucideFileCode
 } from 'lucide-react';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// ... (Keep all your language imports here) ...
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
@@ -28,55 +29,13 @@ import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
-// Register all the languages for my brilliant syntax highlighter
+// ... (Keep languagesToRegister and COMMON_EXCLUSIONS exactly as they are) ...
 const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql, yaml, };
 Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
 
-
-// --- TYPE DEFINITIONS ---
-
-/**
- * Represents a single entry (a file or directory) in the file system tree.
- */
-interface FileSystemEntry {
-  id: string;
-  name: string;
-  kind: 'file' | 'directory';
-  path: string;
-  handle: FileSystemHandle;
-  selected: boolean;
-  children?: FileSystemEntry[];
-  isOpen?: boolean;
-  indeterminate?: boolean;
-  isLoadingChildren?: boolean;
-}
-
-type TabId = 'output' | string; // A tab can be the output or a file ID
-type PreviewType = 'code' | 'image' | 'video' | 'unsupported';
-
-interface PreviewState {
-  content: string;
-  isLoading: boolean;
-  error: string | null;
-  type: PreviewType;
-}
-
-interface WorkAreaPanelProps {
-  openTabs: FileSystemEntry[];
-  activeTabId: TabId;
-  onTabClick: (id: TabId) => void;
-  onCloseTab: (id: TabId) => void;
-  children: ReactNode;
-}
-
-// --- CONFIGURATION CONSTANTS ---
-
-/**
- * My Brilliant Ignore-Inator Blueprints: A map of filter names to functions.
- * Each function returns true if a given path should be excluded.
- */
+// ... (Keep COMMON_EXCLUSIONS exactly as is) ...
 const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Node Modules': (path: string) => path === 'node_modules' || path.startsWith('node_modules/'),
   'Dist/Build': (path: string) => ['dist', 'build'].some(dir => path === dir || path.startsWith(`${dir}/`)),
@@ -95,34 +54,22 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Next.js Build (.next/out)': (p) =>
     p === '.next' || p.startsWith('.next/') || // Next.js build output
     p === 'out' || p.startsWith('out/'),     // `next export` output
-
   'Vercel & Turbo Caches': (p) =>
     p === '.vercel' || p.startsWith('.vercel/') || // Vercel CLI project metadata
     p === '.turbo' || p.startsWith('.turbo/'),    // Turborepo local cache
-
-  // pnpm artifacts
   'pnpm Store/Artifacts': (p) =>
     p === '.pnpm' || p.startsWith('.pnpm/') ||                    // sometimes present
     p.startsWith('node_modules/.pnpm/') ||                        // pnpm’s content-addressed store in project
     p.endsWith('pnpm-debug.log'),
-
-  // Optional: pnpm config/lock files (useful to exclude from the *combined text*;
-  // note: pnpm docs recommend committing pnpm-lock.yaml to git)
   'pnpm Lock & Workspace': (p) =>
     p.endsWith('pnpm-lock.yaml') || p.endsWith('pnpm-workspace.yaml'),
-
-  // GitHub repo meta / CI
   'GitHub (.github)': (p) => p === '.github' || p.startsWith('.github/'),
-
   'Cloudflare Wrangler': (p) =>
     p === '.wrangler' || p.startsWith('.wrangler/') ||  // local state dir
     p.endsWith('wrangler.toml') ||                      // config file (works in monorepos too)
     p.endsWith('wrangler.json') ||                      // rarely used alt config
     p.endsWith('.dev.vars'),                            // local env for `wrangler dev`
-
   'JSON Files': (p: string) => p.toLowerCase().endsWith('.json'),
-
-  // NEW: ignore Husky hooks/config
   'Husky Hooks': (p: string) =>
     p === '.husky' || p.startsWith('.husky/') ||
     p.endsWith('.huskyrc') ||
@@ -130,8 +77,37 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
     p.endsWith('.huskyrc.json') || p.endsWith('.huskyrc.ts'),
 };
 
+// ... (Keep Type Definitions and Helper Functions exactly as they are) ...
+interface FileSystemEntry {
+  id: string;
+  name: string;
+  kind: 'file' | 'directory';
+  path: string;
+  handle: FileSystemHandle;
+  selected: boolean;
+  children?: FileSystemEntry[];
+  isOpen?: boolean;
+  indeterminate?: boolean;
+  isLoadingChildren?: boolean;
+}
 
-// --- HELPER FUNCTIONS ---
+type TabId = 'output' | string;
+type PreviewType = 'code' | 'image' | 'video' | 'unsupported';
+
+interface PreviewState {
+  content: string;
+  isLoading: boolean;
+  error: string | null;
+  type: PreviewType;
+}
+
+interface WorkAreaPanelProps {
+  openTabs: FileSystemEntry[];
+  activeTabId: TabId;
+  onTabClick: (id: TabId) => void;
+  onCloseTab: (id: TabId) => void;
+  children: ReactNode;
+}
 
 const hasOverrideUnder = (dirPath: string, overrides: Set<string>) => {
   const prefix = dirPath ? dirPath + '/' : '';
@@ -141,9 +117,6 @@ const hasOverrideUnder = (dirPath: string, overrides: Set<string>) => {
   return false;
 };
 
-/**
- * Recursively finds a file system entry by its ID within a tree structure.
- */
 const findEntry = (nodes: FileSystemEntry[], id: string): FileSystemEntry | null => {
   for (const node of nodes) {
     if (node.id === id) return node;
@@ -155,9 +128,6 @@ const findEntry = (nodes: FileSystemEntry[], id: string): FileSystemEntry | null
   return null;
 };
 
-/**
- * Reads all entries from a given directory handle and sorts them.
- */
 const processDirectoryLevel = async (directoryHandle: FileSystemDirectoryHandle, path = ''): Promise<FileSystemEntry[]> => {
   const entries: FileSystemEntry[] = [];
   for await (const handle of directoryHandle.values()) {
@@ -172,18 +142,12 @@ const processDirectoryLevel = async (directoryHandle: FileSystemDirectoryHandle,
       isOpen: false,
     });
   }
-  // Sort with directories first, then alphabetically.
   return entries.sort((a, b) => {
     if (a.kind === b.kind) return a.name.localeCompare(b.name);
     return a.kind === 'directory' ? -1 : 1;
   });
 };
 
-/**
- * Lazily loads children for a specific directory and inserts them into the tree.
- * This corrected version ensures that child selection state is set correctly
- * based on the parent's state, preventing selection corruption upon expansion.
- */
 const loadAndInsertChildren = async (
   baseTree: FileSystemEntry[],
   id: string,
@@ -220,11 +184,6 @@ const loadAndInsertChildren = async (
   return buildNewTree(baseTree);
 };
 
-
-/**
- * Recursively applies active filters to the tree, updating selection states.
- * It cleverly preserves the `isOpen` state of directories.
- */
 const applyFiltersAndPreserveOpenState = (
   nodes: FileSystemEntry[],
   activeFilters: Set<string>,
@@ -232,89 +191,55 @@ const applyFiltersAndPreserveOpenState = (
 ): FileSystemEntry[] => {
   const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
   const hasActiveFilters = activeFilters.size > 0;
-
   const isPathFiltered = (p: string) => filterFns.some(fn => fn(p));
 
   const recurse = (entries: FileSystemEntry[]): FileSystemEntry[] => {
     return entries.map(entry => {
       const wasSelected = !!entry.selected;
-      const wasIndeterminate = !!entry.indeterminate;
       const isFilteredHere = isPathFiltered(entry.path);
 
-      // --- DIRECTORIES ---
       if (entry.kind === 'directory') {
-        // If the directory itself is filtered (e.g., node_modules) and there's no override under it, unselect it.
         if (isFilteredHere && !hasOverrideUnder(entry.path, includeOverrides)) {
           return { ...entry, selected: false, indeterminate: false };
         }
-
         if (entry.children) {
           const newChildren = recurse(entry.children);
-
           const selectedOrIndeterminate = newChildren.filter(c => c.selected || c.indeterminate).length;
-          const allFullySelected =
-            newChildren.length > 0 && newChildren.every(c => c.selected && !c.indeterminate);
+          const allFullySelected = newChildren.length > 0 && newChildren.every(c => c.selected && !c.indeterminate);
 
-          // Preserve the user's folder selection; compute only the visual indeterminate.
           let newSelected = wasSelected;
           let newIndeterminate = false;
 
           if (newChildren.length === 0) {
-            // No visible children after filters. If the user had selected this folder,
-            // show "indeterminate" to indicate hidden (filtered) content.
             newIndeterminate = hasActiveFilters && wasSelected;
           } else if (allFullySelected) {
-            // All visible children fully selected
             newIndeterminate = false;
           } else if (selectedOrIndeterminate > 0) {
-            // Some visible children selected/indeterminate
             newIndeterminate = true;
           } else {
-            // No visible children selected. If user had it selected and filters are active,
-            // keep it selected but indeterminate to avoid "auto-unchecking" the folder.
             newIndeterminate = hasActiveFilters && wasSelected;
           }
-
           return { ...entry, children: newChildren, selected: newSelected, indeterminate: newIndeterminate };
         }
-
-        // Unloaded directory (no children loaded yet).
-        // Do NOT auto-uncheck just because filters are active.
-        // Keep user's selection, and if filters are active and it’s selected, show indeterminate.
         return {
           ...entry,
           selected: wasSelected,
           indeterminate: hasActiveFilters && wasSelected,
         };
       }
-
-      // --- FILES ---
-      // Manual override always wins.
       if (includeOverrides.has(entry.id)) {
         return { ...entry, selected: true, indeterminate: false };
       }
-
-      // For filtered files, don't include them in selection,
-      // but don't mutate parent selection logic beyond this point.
       if (isFilteredHere) {
         return { ...entry, selected: false, indeterminate: false };
       }
-
-      // Otherwise, file is selectable as usual.
       return { ...entry, selected: true, indeterminate: false };
     });
   };
-
   return recurse(nodes);
 };
 
-
-/**
- * Updates the selection state of an entry and all its children, then corrects parent states up the tree.
- */
 const updateSelectionRecursive = (nodes: FileSystemEntry[], id: string, selected: boolean): FileSystemEntry[] => {
-  // First, propagate the user's click downwards.
-  // If a parent is checked, all children are checked. If unchecked, all are unchecked.
   const updateChildren = (entries: FileSystemEntry[]): FileSystemEntry[] => {
     return entries.map(entry => {
       if (entry.id === id) {
@@ -337,21 +262,12 @@ const updateSelectionRecursive = (nodes: FileSystemEntry[], id: string, selected
       return entry;
     });
   };
-
   const treeWithUpdatedChildren = updateChildren(nodes);
 
-  // Second, bubble up from the bottom to correct the state of all parent directories.
   const correctParentStates = (entries: FileSystemEntry[]): FileSystemEntry[] => {
     return entries.map(entry => {
-      // We only care about directories with loaded children.
-      if (entry.kind !== 'directory' || !entry.children) {
-        return entry;
-      }
-
-      // First, ensure all children have their correct states.
+      if (entry.kind !== 'directory' || !entry.children) return entry;
       const newChildren = correctParentStates(entry.children);
-
-      // We now correctly check for both selected and indeterminate children.
       const fullySelectedChildren = newChildren.filter(c => c.selected && !c.indeterminate).length;
       const partiallySelectedChildren = newChildren.filter(c => c.indeterminate).length;
       const totalSelectedDescendants = fullySelectedChildren + partiallySelectedChildren;
@@ -360,31 +276,21 @@ const updateSelectionRecursive = (nodes: FileSystemEntry[], id: string, selected
       let newIndeterminate = false;
 
       if (totalSelectedDescendants === 0) {
-        // CASE 1: No children are selected or indeterminate. This parent is fully deselected.
         newSelected = false;
         newIndeterminate = false;
       } else if (fullySelectedChildren === newChildren.length) {
-        // CASE 2: All children are fully selected. This parent is also fully selected.
         newSelected = true;
         newIndeterminate = false;
       } else {
-        // CASE 3: Any other combination (some selected, some not; some indeterminate).
-        // This parent must be in an indeterminate state.
         newSelected = false;
         newIndeterminate = true;
       }
-
       return { ...entry, children: newChildren, selected: newSelected, indeterminate: newIndeterminate };
     });
   };
-
-  // Run the correction process on the whole tree.
   return correctParentStates(treeWithUpdatedChildren);
 };
 
-/**
- * Recursively expands or collapses all folders in the tree.
- */
 const toggleAllFolders = (entries: FileSystemEntry[], isOpen: boolean): FileSystemEntry[] => {
   return entries.map(entry => {
     if (entry.kind === 'directory') {
@@ -398,26 +304,17 @@ const toggleAllFolders = (entries: FileSystemEntry[], isOpen: boolean): FileSyst
   });
 };
 
-/**
- * Determines the type of preview to show based on the file extension.
- */
 const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsupported' => {
   const extension = filename.split('.').pop()?.toLowerCase() || '';
-
   const codeExtensions = [
     'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'mdx', 'py', 'rs', 'xml', 'prisma', 'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql', 'yaml', 'yml', 'lock', 'sum', 'sh',
   ];
-
   if (codeExtensions.includes(extension)) return 'code';
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) return 'image';
   if (['mp4', 'webm', 'mov'].includes(extension)) return 'video';
-
   return 'unsupported';
 };
 
-/**
- * Gets the correct language string for the syntax highlighter based on file extension.
- */
 const getLanguageForPreview = (filename: string): string => {
   const extension = filename.split('.').pop()?.toLowerCase() || '';
   switch (extension) {
@@ -451,12 +348,8 @@ const getLanguageForPreview = (filename: string): string => {
   }
 };
 
+// --- NEW COMPONENTS ---
 
-// --- REACT COMPONENTS ---
-
-/**
- * A custom checkbox component that supports an "indeterminate" state.
- */
 const IndeterminateCheckbox: React.FC<{
   checked: boolean;
   indeterminate?: boolean;
@@ -464,11 +357,7 @@ const IndeterminateCheckbox: React.FC<{
   id: string;
 }> = ({ checked, indeterminate, onChange, id }) => {
   const ref = useRef<HTMLInputElement>(null!);
-
-  useEffect(() => {
-    ref.current.indeterminate = indeterminate || false;
-  }, [indeterminate]);
-
+  useEffect(() => { ref.current.indeterminate = indeterminate || false; }, [indeterminate]);
   return (
     <input
       ref={ref}
@@ -476,14 +365,174 @@ const IndeterminateCheckbox: React.FC<{
       id={id}
       checked={checked}
       onChange={onChange}
-      className="form-checkbox h-4 w-4 rounded bg-gray-700 border-gray-600 text-indigo-500 focus:ring-indigo-600 focus:ring-offset-gray-800"
+      className="form-checkbox h-4 w-4 rounded bg-gray-900 border-gray-600 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900 cursor-pointer"
     />
   );
 };
 
-/**
- * Renders the file tree recursively and handles user interactions.
- */
+// New Component: Displays token usage visually
+const TokenBar: React.FC<{ charCount: number, tokenCount: number }> = ({ charCount, tokenCount }) => {
+  const LIMITS = [
+    { label: '32k', val: 32000 },
+    { label: '128k', val: 128000 },
+    { label: '1M', val: 1000000 }
+  ];
+
+  // Find the next active limit
+  const activeLimit = LIMITS.find(l => tokenCount < l.val) || LIMITS[LIMITS.length - 1];
+  const percent = Math.min((tokenCount / activeLimit.val) * 100, 100);
+
+  return (
+    <div className="flex flex-col w-full max-w-md">
+      <div className="flex justify-between text-xs text-gray-400 mb-1 font-mono">
+        <span>{tokenCount.toLocaleString()} tokens</span>
+        <span>Limit: {activeLimit.label}</span>
+      </div>
+      <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+        <div
+          className={`h-full transition-all duration-500 ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// New Component: Top Navigation Bar
+const TopBar: React.FC<{
+  directoryName: string | null;
+  onSelectFolder: () => void;
+  isLoading: boolean;
+  onGenerate: () => void;
+  isGenerating: boolean;
+  hasFiles: boolean;
+  charCount: number;
+  tokenCount: number;
+}> = ({ directoryName, onSelectFolder, isLoading, onGenerate, isGenerating, hasFiles, charCount, tokenCount }) => (
+  <div className="glass-header h-16 px-6 flex items-center justify-between shrink-0 z-20">
+    <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        <div className="p-2 bg-purple-900/50 rounded-lg border border-purple-500/30">
+          <LucideZap className="text-purple-400" size={20} />
+        </div>
+        <div>
+          <h1 className="font-bold text-white leading-tight">Gemini-Inator</h1>
+          <p className="text-xs text-gray-400 font-mono">Evil Inc. Code Aggregator</p>
+        </div>
+      </div>
+      <div className="h-8 w-px bg-gray-700 mx-2" />
+      <button
+        onClick={onSelectFolder}
+        disabled={isLoading}
+        className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm font-medium transition-all text-gray-200"
+      >
+        {isLoading ? <LucideLoader2 className="animate-spin mr-2" size={16} /> : <LucideFolderOpen className="mr-2" size={16} />}
+        {directoryName ? directoryName : "Select Target"}
+      </button>
+    </div>
+
+    <div className="flex items-center gap-6">
+      {hasFiles && <TokenBar charCount={charCount} tokenCount={tokenCount} />}
+      <button
+        onClick={onGenerate}
+        disabled={isGenerating || !hasFiles}
+        // Added 'whitespace-nowrap' to the className string below
+        className={`flex items-center px-6 py-2 rounded-lg font-bold text-white shadow-lg transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${isGenerating ? 'bg-gray-700' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 animate-glow'}`}
+      >
+        {isGenerating ? (
+          <><LucideLoader2 className="mr-2 animate-spin" /> Processing...</>
+        ) : (
+          <><LucideZap className="mr-2 fill-current" /> FIRE INATOR</>
+        )}
+      </button>
+    </div>
+  </div>
+);
+
+// Refactored: Sidebar with Chips for filters
+const Sidebar: React.FC<{
+  fileTree: FileSystemEntry[];
+  filterText: string;
+  onFilterTextChange: (text: string) => void;
+  onToggleSelection: (id: string, selected: boolean) => void;
+  onToggleOpen: (id: string) => void;
+  onToggleAll: (isOpen: boolean) => void;
+  onPreviewFile: (entry: FileSystemEntry) => void;
+  activeFilters: Set<string>;
+  onToggleFilter: (name: string) => void;
+  onSelectAllFilters: () => void;
+}> = ({ fileTree, filterText, onFilterTextChange, onToggleSelection, onToggleOpen, onToggleAll, onPreviewFile, activeFilters, onToggleFilter, onSelectAllFilters }) => {
+  const [showFilters, setShowFilters] = useState(false);
+
+  return (
+    <div className="flex flex-col h-full glass-panel rounded-r-xl border-l-0 border-y-0">
+      <div className="p-4 border-b border-gray-700/50 bg-gray-900/30">
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-grow group">
+            <LucideSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-400 transition-colors" size={16} />
+            <input
+              type="text"
+              placeholder="Search gizmos..."
+              value={filterText}
+              onChange={(e) => onFilterTextChange(e.target.value)}
+              className="w-full py-2 pl-9 pr-4 text-sm bg-gray-900/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none transition-all"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg border transition-colors ${showFilters ? 'bg-purple-900/50 border-purple-500 text-purple-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}
+            title="Toggle Filters"
+          >
+            <LucideSettings size={18} />
+          </button>
+        </div>
+
+        {/* Collapsible Filter Area */}
+        {showFilters && (
+          <div className="mb-3 p-3 bg-gray-900/80 rounded-lg border border-gray-700/50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ignore-Inators</span>
+              <button onClick={onSelectAllFilters} className="text-xs text-purple-400 hover:text-purple-300">Reset All</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+              {Object.keys(COMMON_EXCLUSIONS).map((name) => (
+                <button
+                  key={name}
+                  onClick={() => onToggleFilter(name)}
+                  className={`px-2 py-1 rounded text-[10px] font-medium transition-colors border ${activeFilters.has(name)
+                    ? 'bg-red-900/30 border-red-800 text-red-300 hover:bg-red-900/50'
+                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                    }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center text-xs text-gray-500 px-1">
+          <span>FILES</span>
+          <div className="flex gap-1">
+            <button onClick={() => onToggleAll(true)} className="hover:text-white" title="Expand All"><LucideChevronsRight size={14} /></button>
+            <button onClick={() => onToggleAll(false)} className="hover:text-white" title="Collapse All"><LucideChevronsLeft size={14} /></button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-grow overflow-y-auto p-2 custom-scrollbar">
+        <FileTree
+          entries={fileTree}
+          filterText={filterText}
+          onToggleSelection={onToggleSelection}
+          onToggleOpen={onToggleOpen}
+          onPreviewFile={onPreviewFile}
+        />
+      </div>
+    </div>
+  );
+};
+
 const FileTree: React.FC<{
   entries: FileSystemEntry[];
   filterText: string;
@@ -494,7 +543,6 @@ const FileTree: React.FC<{
   const filteredEntries = useMemo(() => {
     if (!filterText) return entries;
     const lowercasedFilter = filterText.toLowerCase();
-
     const filter = (items: FileSystemEntry[]): FileSystemEntry[] => {
       return items.reduce((acc, item) => {
         if (item.name.toLowerCase().includes(lowercasedFilter)) {
@@ -503,9 +551,7 @@ const FileTree: React.FC<{
         }
         if (item.children) {
           const filteredChildren = filter(item.children);
-          if (filteredChildren.length > 0) {
-            acc.push({ ...item, children: filteredChildren });
-          }
+          if (filteredChildren.length > 0) acc.push({ ...item, children: filteredChildren });
         }
         return acc;
       }, [] as FileSystemEntry[]);
@@ -514,56 +560,57 @@ const FileTree: React.FC<{
   }, [entries, filterText]);
 
   if (filteredEntries.length === 0 && filterText.length > 0) {
-    return <div className="p-4 text-center text-gray-500">Not a single gizmo matches your search.</div>;
+    return <div className="p-4 text-center text-gray-500 text-sm">No gizmos found.</div>;
   }
 
   return (
-    <ul className="pl-2 text-gray-300">
+    <ul className="pl-1 space-y-0.5">
       {filteredEntries.map(entry => (
-        <li key={entry.id} className="my-0.5">
-          <div className="flex items-center p-1 rounded-md hover:bg-gray-700/50">
+        <li key={entry.id}>
+          <div className={`flex items-center py-1 px-2 rounded-md transition-colors group ${entry.selected ? 'bg-purple-900/10' : ''} hover:bg-gray-800`}>
             <IndeterminateCheckbox
               id={`cb-${entry.id}`}
               checked={entry.selected}
               indeterminate={entry.indeterminate}
               onChange={(e) => onToggleSelection(entry.id, e.target.checked)}
             />
-            <label htmlFor={`cb-${entry.id}`} className="flex items-center w-full ml-3 cursor-pointer">
+            <div className="flex items-center flex-1 min-w-0 ml-2">
               {entry.kind === 'directory' ? (
-                <button onClick={() => onToggleOpen(entry.id)} className="flex items-center">
+                <button
+                  onClick={() => onToggleOpen(entry.id)}
+                  className="flex items-center text-gray-400 hover:text-white focus:outline-none"
+                >
                   {entry.isLoadingChildren ? (
-                    <LucideLoader2 size={18} className="mr-1 text-gray-400 animate-spin" />
+                    <LucideLoader2 size={14} className="mr-1.5 animate-spin" />
                   ) : (
-                    entry.isOpen ? (
-                      <LucideChevronDown size={18} className="mr-1 text-gray-400" />
-                    ) : (
-                      <LucideChevronRight size={18} className="mr-1 text-gray-400" />
-                    )
+                    entry.isOpen ? <LucideChevronDown size={14} className="mr-1.5" /> : <LucideChevronRight size={14} className="mr-1.5" />
                   )}
-                  <LucideFolder size={18} className="mr-2 text-yellow-500" />
+                  <LucideFolder size={14} className={`mr-2 ${entry.selected || entry.indeterminate ? 'text-amber-400' : 'text-gray-500'}`} />
+                  <span className="truncate text-sm text-gray-300 group-hover:text-white select-none">{entry.name}</span>
                 </button>
               ) : (
-                <div className="flex items-center ml-5">
-                  <LucideFile size={18} className="mr-2 text-blue-400" />
-                </div>
+                <button
+                  onClick={() => onPreviewFile(entry)}
+                  className="flex items-center flex-1 min-w-0 text-left focus:outline-none"
+                >
+                  <LucideFileCode size={14} className={`mr-2 shrink-0 ${entry.selected ? 'text-blue-400' : 'text-gray-600'}`} />
+                  <span className={`truncate text-sm group-hover:text-white transition-colors ${entry.selected ? 'text-gray-200' : 'text-gray-500'}`}>
+                    {entry.name}
+                  </span>
+                </button>
               )}
-              <button
-                onClick={() => onPreviewFile(entry)}
-                className="text-left truncate hover:text-indigo-400 hover:underline"
-                title={`Inspect ${entry.name}`}
-              >
-                {entry.name}
-              </button>
-            </label>
+            </div>
           </div>
           {entry.kind === 'directory' && entry.isOpen && entry.children && (
-            <FileTree
-              entries={entry.children}
-              filterText=""
-              onToggleSelection={onToggleSelection}
-              onToggleOpen={onToggleOpen}
-              onPreviewFile={onPreviewFile}
-            />
+            <div className="ml-4 border-l border-gray-800">
+              <FileTree
+                entries={entry.children}
+                filterText=""
+                onToggleSelection={onToggleSelection}
+                onToggleOpen={onToggleOpen}
+                onPreviewFile={onPreviewFile}
+              />
+            </div>
           )}
         </li>
       ))}
@@ -571,106 +618,6 @@ const FileTree: React.FC<{
   );
 };
 
-/**
- * Displays the main controls, including folder selection and filter toggles.
- */
-const ControlPanel: React.FC<{
-  onSelectFolder: () => void;
-  isLoading: boolean;
-  activeFilters: Set<string>;
-  onToggleFilter: (name: string) => void;
-  onSelectAllFilters: () => void;
-}> = ({ onSelectFolder, isLoading, activeFilters, onToggleFilter, onSelectAllFilters }) => (
-  <div className="flex flex-col gap-6 p-4 border border-gray-700 rounded-lg shadow-lg bg-gray-800/50">
-    <button
-      onClick={onSelectFolder}
-      disabled={isLoading}
-      className="flex items-center justify-center w-full px-4 py-3 font-bold text-white transition-colors duration-200 bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:bg-indigo-900/50 disabled:cursor-not-allowed text-lg"
-    >
-      {isLoading ? (
-        <><LucideLoader2 className="mr-2 animate-spin" /> Absorbing...</>
-      ) : (
-        <><LucideFolderOpen className="mr-2" /> Select a Folder-Inator!</>
-      )}
-    </button>
-    <div>
-      <h3 className="pb-2 mb-3 text-lg font-semibold text-gray-300 border-b border-gray-600">Master Control-Inators</h3>
-      <button
-        onClick={onSelectAllFilters}
-        className="flex items-center justify-center w-full px-4 py-2 mb-4 font-bold text-white transition-colors duration-200 bg-purple-600 rounded-lg hover:bg-purple-700"
-      >
-        <LucideZap size={18} className="mr-2" /> Activate ALL Ignore-Inators!
-      </button>
-
-      <h3 className="pb-2 mb-3 text-lg font-semibold text-gray-300 border-b border-gray-600">Individual Ignore-Inators</h3>
-      <div className="flex flex-wrap gap-2">
-        {Object.keys(COMMON_EXCLUSIONS).map((name) => (
-          <button
-            key={name}
-            onClick={() => onToggleFilter(name)}
-            className={`py-1.5 px-3 rounded-full text-sm transition-colors duration-200 ${activeFilters.has(name)
-              ? 'bg-red-600 hover:bg-red-700 text-white'
-              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-              }`}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-/**
- * Displays the file tree explorer view with search and expand/collapse controls.
- */
-const FileExplorer: React.FC<{
-  directoryName: string | null;
-  fileTree: FileSystemEntry[];
-  filterText: string;
-  onFilterTextChange: (text: string) => void;
-  onToggleSelection: (id: string, selected: boolean) => void;
-  onToggleOpen: (id: string) => void;
-  onToggleAll: (isOpen: boolean) => void;
-  onPreviewFile: (entry: FileSystemEntry) => void;
-}> = ({ directoryName, fileTree, filterText, onFilterTextChange, onToggleSelection, onToggleOpen, onToggleAll, onPreviewFile }) => (
-  <div className="flex flex-col p-4 border border-gray-700 rounded-lg shadow-lg bg-gray-800/50">
-    <h2 className="pb-3 mb-4 text-xl font-semibold text-gray-200 border-b border-gray-600 truncate">
-      Target Acquired: <span className="text-indigo-400">{directoryName}-Inator!</span>
-    </h2>
-    <div className="flex gap-2 mb-3">
-      <div className="relative flex-grow">
-        <LucideSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-        <input
-          type="text"
-          placeholder="Find a specific gizmo..."
-          value={filterText}
-          onChange={(e) => onFilterTextChange(e.target.value)}
-          className="w-full py-2 pl-10 pr-4 text-gray-300 border border-gray-600 rounded-md bg-gray-900/70 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        />
-      </div>
-      <button onClick={() => onToggleAll(true)} title="Expand All Gizmos" className="p-2 bg-gray-700 rounded-md hover:bg-gray-600">
-        <LucideChevronsRight size={20} />
-      </button>
-      <button onClick={() => onToggleAll(false)} title="Collapse All Gizmos" className="p-2 bg-gray-700 rounded-md hover:bg-gray-600">
-        <LucideChevronsLeft size={20} />
-      </button>
-    </div>
-    <div className="flex-grow p-2 overflow-y-auto border border-gray-700 rounded-md bg-gray-900/60 min-h-[60vh]">
-      <FileTree
-        entries={fileTree}
-        filterText={filterText}
-        onToggleSelection={onToggleSelection}
-        onToggleOpen={onToggleOpen}
-        onPreviewFile={onPreviewFile}
-      />
-    </div>
-  </div>
-);
-
-/**
- * Panel for previewing the content of a selected file.
- */
 const PreviewPanel: React.FC<{
   file: FileSystemEntry;
   content: string;
@@ -679,205 +626,151 @@ const PreviewPanel: React.FC<{
   onClose: () => void;
 }> = ({ file, content, isLoading, error, onClose }) => {
   const previewType = getPreviewType(file.name);
-
-  const renderContent = () => {
-    if (isLoading) {
-      return <div className="flex items-center justify-center h-full"><LucideLoader2 className="w-12 h-12 text-indigo-400 animate-spin" /></div>;
-    }
-    if (error) {
-      return <div className="p-4 text-red-400">{error}</div>;
-    }
-    if (!content) {
-      return <div className="p-4 text-gray-500">Select a file to inspect its contents.</div>;
-    }
-
-    const FixedSyntaxHighlighter = SyntaxHighlighter as any;
-
-    switch (previewType) {
-      case 'code':
-        return (
-          <FixedSyntaxHighlighter language={getLanguageForPreview(file.name)} style={vscDarkPlus} customStyle={{ background: 'transparent', margin: 0, height: '100%' }}>
-            {content}
-          </FixedSyntaxHighlighter>
-        );
-      case 'image':
-        return (
-          <div className="flex items-center justify-center h-full p-4">
-            <img src={content} alt={`Preview of ${file.name}`} className="object-contain max-w-full max-h-full" />
-          </div>
-        );
-      case 'video':
-        return (
-          <div className="flex items-center justify-center h-full p-4">
-            <video src={content} controls className="max-w-full max-h-full" />
-          </div>
-        );
-      default:
-        return <div className="p-4 text-gray-400">Preview for this file type is not supported by my -Inator. It's probably boring anyway.</div>;
-    }
-  };
+  const FixedSyntaxHighlighter = SyntaxHighlighter as any;
 
   return (
-    <div className="flex flex-col p-4 border border-gray-700 rounded-lg shadow-lg bg-gray-800/50">
-      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-600">
-        <div className="flex items-center truncate">
-          <LucideFile size={18} className="mr-2 text-blue-400 shrink-0" />
-          <h2 className="text-xl font-semibold text-gray-200 truncate" title={file.path}>
-            Inspecting: {file.name}
-          </h2>
+    <div className="flex flex-col h-full bg-gray-900/50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/80">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <LucideFileCode size={16} className="text-blue-400 shrink-0" />
+          <span className="text-sm font-medium text-gray-300 truncate font-mono">{file.path}</span>
         </div>
-        <button onClick={onClose} title="Close Inspector" className="p-2 bg-gray-700 rounded-full hover:bg-gray-600">
-          <LucideX size={20} />
-        </button>
       </div>
-      <div className="flex-grow overflow-auto border border-gray-700 rounded-md bg-gray-900/60 min-h-[60vh]">
-        {renderContent()}
+      <div className="flex-grow overflow-auto relative custom-scrollbar">
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <LucideLoader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-red-400">
+            <p className="font-bold mb-2">Error Reading File</p>
+            <p className="text-sm opacity-80">{error}</p>
+          </div>
+        ) : !content ? (
+          <div className="p-8 text-center text-gray-500">Empty file.</div>
+        ) : previewType === 'code' ? (
+          <FixedSyntaxHighlighter
+            language={getLanguageForPreview(file.name)}
+            style={vscDarkPlus}
+            customStyle={{ background: 'transparent', margin: 0, padding: '1.5rem', fontSize: '13px', lineHeight: '1.5' }}
+            showLineNumbers={true}
+            lineNumberStyle={{ minWidth: '2.5em', paddingRight: '1em', color: '#64748b', textAlign: 'right' }}
+          >
+            {content}
+          </FixedSyntaxHighlighter>
+        ) : previewType === 'image' ? (
+          <div className="flex items-center justify-center h-full p-4">
+            <img src={content} alt="Preview" className="max-w-full max-h-full object-contain rounded border border-gray-700" />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">Unsupported preview.</div>
+        )}
       </div>
     </div>
   );
 };
 
-/**
- * Displays the final generated text output and provides generation/copy controls.
- */
 const OutputPanel: React.FC<{
   generatedText: string;
-  isGenerating: boolean;
-  hasFiles: boolean;
-  onGenerate: () => void;
-  onCopy: () => void;
-  copySuccess: boolean;
   promptPrefix: string;
   onPromptPrefixChange: (value: string) => void;
   promptSuffix: string;
   onPromptSuffixChange: (value: string) => void;
-}> = ({ generatedText, isGenerating, hasFiles, onGenerate, onCopy, copySuccess, promptPrefix, onPromptPrefixChange, promptSuffix, onPromptSuffixChange }) => {
-
-  const { charCount, tokenCount } = useMemo(() => {
-    const parts = [];
-    if (promptPrefix) parts.push(promptPrefix);
-    if (generatedText) parts.push(generatedText);
-    if (promptSuffix) parts.push(promptSuffix);
-    const combinedText = parts.join('\n\n');
-
-    const chars = combinedText.length;
-    const tokens = Math.ceil(chars / 4);
-    return { charCount: chars, tokenCount: tokens };
-  }, [generatedText, promptPrefix, promptSuffix]);
-
+  onCopy: () => void;
+  copySuccess: boolean;
+}> = ({ generatedText, promptPrefix, onPromptPrefixChange, promptSuffix, onPromptSuffixChange, onCopy, copySuccess }) => {
   const SYNTAX_HIGHLIGHT_LIMIT = 200000;
-  const isTooLargeForHighlighting = generatedText.length > SYNTAX_HIGHLIGHT_LIMIT;
+  const isTooLarge = generatedText.length > SYNTAX_HIGHLIGHT_LIMIT;
   const FixedSyntaxHighlighter = SyntaxHighlighter as any;
 
   return (
-    <div className="flex flex-col p-4 border border-gray-700 rounded-lg shadow-lg bg-gray-800/50">
-      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-600">
-        <h2 className="text-xl font-semibold text-gray-200">My Glorious Output!</h2>
-        <button
-          onClick={onGenerate}
-          disabled={isGenerating || !hasFiles}
-          className="flex items-center justify-center w-48 px-4 py-2 font-bold text-white transition-colors duration-200 bg-green-600 rounded-lg hover:bg-green-700 disabled:bg-green-900/50 disabled:cursor-not-allowed"
-        >
-          {isGenerating ? <><LucideLoader2 className="mr-2 animate-spin" />It's Working!...</> : "FIRE THE -INATOR!"}
-        </button>
-      </div>
-
-      <div className="mb-4">
-        <label htmlFor="prompt-prefix" className="block mb-1 text-sm font-medium text-gray-400">
-          Prepend to Prompt (Opening Context):
-        </label>
-        <textarea
-          id="prompt-prefix"
-          rows={3}
-          value={promptPrefix}
-          onChange={(e) => onPromptPrefixChange(e.target.value)}
-          placeholder="For example: This is my app..."
-          className="w-full p-2 text-gray-300 border border-gray-600 rounded-md resize-y bg-gray-900/70 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-        />
-      </div>
-
-      <div className="relative flex-grow">
-        {generatedText && (
-          <button onClick={onCopy} className="absolute top-2 right-2 z-10 flex items-center px-3 py-1 text-sm text-gray-300 transition-colors bg-gray-700 rounded-md hover:bg-gray-600">
-            <LucideCopy size={14} className="mr-2" />
-            {copySuccess ? 'My Genius! Stolen!' : 'Steal My Genius!'}
-          </button>
-        )}
-        {isTooLargeForHighlighting && (
-          <div className="px-3 py-1.5 text-xs text-yellow-400 border border-yellow-700 rounded-t-md bg-yellow-900/30">
-            My output is too powerful for fancy colors! Displaying as plain text for performance.
+    <div className="flex flex-col h-full bg-gray-900/50">
+      <div className="flex-grow flex flex-col min-h-0">
+        {/* Input Areas */}
+        <div className="p-4 space-y-4 border-b border-gray-800 bg-gray-900/30">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Context / Prefix</label>
+            <textarea
+              value={promptPrefix}
+              onChange={(e) => onPromptPrefixChange(e.target.value)}
+              placeholder="E.g., 'You are an expert React developer. Analyze this code...'"
+              className="w-full p-2 text-sm bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-1 focus:ring-purple-500 outline-none resize-none h-16 transition-all"
+            />
           </div>
-        )}
-        <div className={`w-full h-[calc(60vh)] font-mono text-sm text-gray-300 bg-gray-900/70 border border-gray-700 overflow-auto focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 ${isTooLargeForHighlighting ? 'rounded-b-md' : 'rounded-md'}`}>
-          {isTooLargeForHighlighting ? (
-            <textarea readOnly value={generatedText} className="w-full h-full p-4 bg-transparent border-none resize-none focus:ring-0" />
-          ) : (
-            <FixedSyntaxHighlighter language="javascript" style={vscDarkPlus} customStyle={{ background: 'transparent', margin: 0, padding: '1rem', height: '100%' }}>
-              {generatedText || "// The combined text-thingy will appear here... probably."}
-            </FixedSyntaxHighlighter>
-          )}
         </div>
 
-        <div className="mt-4">
-          <label htmlFor="prompt-suffix" className="block mb-1 text-sm font-medium text-gray-400">
-            Append to Prompt (Final Instructions):
-          </label>
+        {/* Output Area */}
+        <div className="relative flex-grow min-h-0 overflow-hidden">
+          <div className="absolute top-2 right-4 z-10">
+            <button
+              onClick={onCopy}
+              disabled={!generatedText}
+              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md shadow-lg transition-all ${copySuccess ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600'}`}
+            >
+              {copySuccess ? <span className="mr-1">Stolen!</span> : <LucideCopy size={14} className="mr-1.5" />}
+              {copySuccess ? '' : 'Copy to Clipboard'}
+            </button>
+          </div>
+
+          <div className="h-full overflow-hidden custom-scrollbar bg-[#1e1e1e]">
+            {generatedText ? (
+              isTooLarge ? (
+                <textarea readOnly value={generatedText} className="w-full h-full p-4 bg-transparent text-gray-300 font-mono text-xs border-none resize-none focus:ring-0" />
+              ) : (
+                <FixedSyntaxHighlighter
+                  language="javascript"
+                  style={vscDarkPlus}
+                  customStyle={{ background: 'transparent', margin: 0, padding: '1.5rem', minHeight: '100%', fontSize: '12px' }}
+                >
+                  {generatedText}
+                </FixedSyntaxHighlighter>
+              )
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50 select-none">
+                <LucideCode2 size={48} className="mb-4" />
+                <p>Output will appear here...</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Suffix Area */}
+        <div className="p-4 border-t border-gray-800 bg-gray-900/30">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Final Instructions / Suffix</label>
           <textarea
-            id="prompt-suffix"
-            rows={3}
             value={promptSuffix}
             onChange={(e) => onPromptSuffixChange(e.target.value)}
-            placeholder="For example: Please analyze this code for bugs..."
-            className="w-full p-2 text-gray-300 border border-gray-600 rounded-md resize-y bg-gray-900/70 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="E.g., 'Find all security vulnerabilities.'"
+            className="w-full p-2 text-sm bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-1 focus:ring-purple-500 outline-none resize-none h-16 transition-all"
           />
         </div>
-
-        {(generatedText || promptSuffix) && (
-          <div className="pr-1 mt-2 text-xs text-right text-gray-500">
-            {charCount.toLocaleString()} characters | ~{tokenCount.toLocaleString()} tokens of pure evil genius!
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-
-/**
- * Main App Component - My Evil Lair
- * This component orchestrates the entire application, managing state and logic for file handling,
- * UI interactions, and text generation.
- */
-const FILTERS_STORAGE_KEY = 'doofenshmirtz_evil_incorporated_filters';
-
+// ... (WorkAreaPanel remains largely the same, but with cleaner tab styles) ...
 const WorkAreaPanel: React.FC<WorkAreaPanelProps> = ({ openTabs, activeTabId, onTabClick, onCloseTab, children }) => {
   const [preview, setPreview] = useState<PreviewState>({ content: '', isLoading: false, error: null, type: 'unsupported' });
   const activeFile = useMemo(() => openTabs.find(tab => tab.id === activeTabId), [openTabs, activeTabId]);
 
   useEffect(() => {
-    if (activeTabId === 'output' || !activeFile) {
-      return;
-    }
-
+    if (activeTabId === 'output' || !activeFile) return;
     const loadContent = async (fileEntry: FileSystemEntry) => {
       setPreview({ content: '', isLoading: true, error: null, type: 'unsupported' });
-
       const previewType = getPreviewType(fileEntry.name);
       if (previewType === 'unsupported') {
-        setPreview({ content: '', isLoading: false, error: "This file type cannot be previewed.", type: 'unsupported' });
+        setPreview({ content: '', isLoading: false, error: "Unsupported file type.", type: 'unsupported' });
         return;
       }
-
       try {
         const fileHandle = fileEntry.handle as FileSystemFileHandle;
         const file = await fileHandle.getFile();
-
         if (previewType === 'code') {
-          if (file.size > 5 * 1024 * 1024) throw new Error("Code file is too large for preview!");
+          if (file.size > 5 * 1024 * 1024) throw new Error("File too large.");
           const text = await file.text();
           setPreview({ content: text, isLoading: false, error: null, type: 'code' });
-        } else if (previewType === 'image' || previewType === 'video') {
-          if (file.size > 50 * 1024 * 1024) throw new Error("Media file is too large for preview!");
+        } else {
           const url = URL.createObjectURL(file);
           setPreview({ content: url, isLoading: false, error: null, type: previewType });
         }
@@ -885,20 +778,13 @@ const WorkAreaPanel: React.FC<WorkAreaPanelProps> = ({ openTabs, activeTabId, on
         setPreview({ content: '', isLoading: false, error: err.message, type: 'unsupported' });
       }
     };
-
     loadContent(activeFile);
-
-    return () => {
-      if (preview.content && preview.content.startsWith('blob:')) {
-        URL.revokeObjectURL(preview.content);
-      }
-    };
+    return () => { if (preview.content && preview.content.startsWith('blob:')) URL.revokeObjectURL(preview.content); };
   }, [activeTabId, activeFile]);
 
   const renderContent = () => {
     if (activeTabId === 'output') return children;
     if (!activeFile) return null;
-
     return (
       <PreviewPanel
         key={activeFile.id}
@@ -912,63 +798,44 @@ const WorkAreaPanel: React.FC<WorkAreaPanelProps> = ({ openTabs, activeTabId, on
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-shrink-0 flex items-end border-b-2 border-gray-700 bg-gray-900/70">
+    <div className="flex flex-col h-full glass-panel rounded-l-xl border-r-0 border-y-0 overflow-hidden">
+      <div className="flex items-end bg-gray-900/50 border-b border-gray-700/50 px-2 pt-2 gap-1 overflow-x-auto custom-scrollbar shrink-0">
         <button
           onClick={() => onTabClick('output')}
-          className={`flex items-center px-4 py-2 border-b-2 text-sm transition-colors duration-200 ${activeTabId === 'output' ? 'bg-gray-800/60 border-indigo-400 text-white' : 'border-transparent text-gray-400 hover:bg-gray-800/30 hover:text-gray-200'
-            }`}
+          className={`flex items-center px-4 py-2 text-xs font-medium rounded-t-lg transition-all ${activeTabId === 'output' ? 'bg-gray-800 text-purple-400 border-t border-x border-gray-700' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'}`}
         >
-          <LucideZap size={14} className="mr-2 text-green-400" />
-          Output
+          <LucideZap size={14} className="mr-2" /> Output
         </button>
         {openTabs.map(tab => (
           <div
             key={tab.id}
-            className={`flex items-center group pl-4 pr-2 py-2 border-b-2 text-sm transition-colors duration-200 ${activeTabId === tab.id ? 'bg-gray-800/60 border-indigo-400 text-white' : 'border-transparent text-gray-400 hover:bg-gray-800/30 hover:text-gray-200'
-              }`}
+            className={`flex items-center group px-3 py-2 text-xs font-medium rounded-t-lg max-w-[150px] transition-all border-t border-x ${activeTabId === tab.id ? 'bg-gray-800 text-blue-400 border-gray-700' : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'}`}
+            onClick={() => onTabClick(tab.id)}
           >
-            <button onClick={() => onTabClick(tab.id)} className="flex items-center">
-              <LucideFile size={14} className="mr-2 text-blue-400" />
-              {tab.name}
-            </button>
+            <LucideFile size={12} className="mr-2 shrink-0" />
+            <span className="truncate cursor-pointer">{tab.name}</span>
             <button
               onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
-              className="ml-3 p-0.5 rounded-full opacity-50 group-hover:opacity-100 hover:bg-red-500/50"
-              title={`Close ${tab.name}`}
+              className="ml-2 p-0.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400 transition-all"
             >
-              <LucideX size={14} />
+              <LucideX size={12} />
             </button>
           </div>
         ))}
       </div>
-      <div className="flex-grow bg-gray-800/50 overflow-y-auto">
+      <div className="flex-grow overflow-hidden bg-[#0f172a]">
         {renderContent()}
       </div>
     </div>
   );
 };
 
-/**
- * Checks if a path is excluded by any of the active filters and returns the name of the filter.
- * @param path The file or directory path to check.
- * @param activeFilters The set of currently active filter names.
- * @returns The name of the matching filter, or null if not excluded.
- */
-const getExclusionReason = (path: string, activeFilters: Set<string>): string | null => {
-  for (const filterName of activeFilters) {
-    const filterFn = COMMON_EXCLUSIONS[filterName];
-    if (filterFn && filterFn(path)) {
-      return filterName; // Return the name of the first matching filter
-    }
-  }
-  return null; // Not excluded by any active filter
-};
+// ... (Main App Component logic remains mostly the same, just rendering the new layout) ...
+
+const FILTERS_STORAGE_KEY = 'doofenshmirtz_evil_incorporated_filters';
 
 export default function App() {
-
-  // --- STATE MANAGEMENT ---
-
+  // ... (Keep all existing state and effects from the previous version) ...
   const [initialFileTree, setInitialFileTree] = useState<FileSystemEntry[]>([]);
   const [processedFileTree, setProcessedFileTree] = useState<FileSystemEntry[]>([]);
   const [directoryName, setDirectoryName] = useState<string | null>(null);
@@ -984,8 +851,6 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState<TabId>('output');
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const [includeOverrides, setIncludeOverrides] = useState<Set<string>>(new Set());
-
-  // Load active filters from localStorage on initial render.
   const [activeFilters, setActiveFilters] = useState<Set<string>>(() => {
     try {
       const savedFilters = window.localStorage.getItem(FILTERS_STORAGE_KEY);
@@ -993,12 +858,11 @@ export default function App() {
         const parsed = JSON.parse(savedFilters);
         if (Array.isArray(parsed)) return new Set(parsed);
       }
-    } catch (e) {
-      console.error("Could not load my evil filters from localStorage", e);
-    }
-    return new Set(); // Default to an empty set.
+    } catch (e) { console.error(e); }
+    return new Set();
   });
 
+  // ... (Keep processDirectoryAndSetState, buildCompleteTree, and effects) ...
   const processDirectoryAndSetState = useCallback(async (directoryHandle: FileSystemDirectoryHandle) => {
     try {
       setError(null);
@@ -1011,465 +875,271 @@ export default function App() {
       setIncludeOverrides(new Set());
       setDirectoryName(directoryHandle.name);
       const tree = await processDirectoryLevel(directoryHandle);
-      setInitialFileTree(tree); // This triggers the useEffect to process and filter the tree
+      setInitialFileTree(tree);
     } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setError(`My scheme has failed! ${err.message}`);
-      }
+      if (err.name !== 'AbortError') setError(`Scheme failed! ${err.message}`);
     } finally {
       setIsLoading(false);
       setIsDraggingOver(false);
     }
   }, []);
 
-  // --- SIDE EFFECTS ---
-
-  // Save active filters to localStorage whenever they change.
   useEffect(() => {
-    try {
-      const filtersJSON = JSON.stringify(Array.from(activeFilters));
-      window.localStorage.setItem(FILTERS_STORAGE_KEY, filtersJSON);
-    } catch (e) {
-      console.error("Could not save my evil filters to localStorage", e);
-    }
+    try { window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(Array.from(activeFilters))); } catch (e) { }
   }, [activeFilters]);
 
-  // Re-apply filters to the tree whenever the active filters change.
   useEffect(() => {
     if (initialFileTree.length > 0) {
       const newlyProcessedTree = applyFiltersAndPreserveOpenState(initialFileTree, activeFilters, includeOverrides);
       setProcessedFileTree(newlyProcessedTree);
     }
-    // Don't add includeOverrides to deps to avoid wiping manual non-override selections
   }, [activeFilters, initialFileTree]);
 
-
-  // --- EVENT HANDLERS ---
-
+  // ... (Keep handleSelectFolder, handleDragOver, handleDrop, handleToggleSelection, etc.) ...
   const handleSelectFolder = async () => {
-    if (!('showDirectoryPicker' in window)) {
-      setError('My plans are foiled! Your browser does not support the File System Access API.');
-      return;
-    }
+    if (!('showDirectoryPicker' in window)) { setError('Browser not supported.'); return; }
     try {
       const directoryHandle = await window.showDirectoryPicker();
-      await processDirectoryAndSetState(directoryHandle); // Use the refactored logic
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setError(`My scheme has failed! ${err.message}`);
-      }
-    }
+      await processDirectoryAndSetState(directoryHandle);
+    } catch (err: any) { if (err.name !== 'AbortError') setError(err.message); }
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(false);
-  };
-
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); };
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false); };
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingOver(false);
-
+    e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false);
     const items = e.dataTransfer.items;
     if (items && items.length > 0) {
       const handle = await items[0].getAsFileSystemHandle();
-      if (handle && handle.kind === 'directory') {
-        await processDirectoryAndSetState(handle as FileSystemDirectoryHandle);
-      } else {
-        setError("That's not a folder! My -Inator only works on entire folders of evil schemes.");
-      }
+      if (handle && handle.kind === 'directory') await processDirectoryAndSetState(handle as FileSystemDirectoryHandle);
+      else setError("Not a folder!");
     }
   };
 
   const handleToggleSelection = useCallback((id: string, selected: boolean) => {
     setProcessedFileTree(currentTree => updateSelectionRecursive(currentTree, id, selected));
-
-    // Record overrides only when the user clicks a FILE checkbox.
     const entry = findEntry(processedFileTree, id);
     if (entry && entry.kind === 'file') {
       setIncludeOverrides(prev => {
         const next = new Set(prev);
-        if (selected) next.add(id);
-        else next.delete(id);
+        if (selected) next.add(id); else next.delete(id);
         return next;
       });
     }
   }, [processedFileTree]);
 
-
-  const handleToggleAll = useCallback((isOpen: boolean) => {
-    setProcessedFileTree(currentTree => toggleAllFolders(currentTree, isOpen));
-  }, []);
-
-  const handleToggleFilter = (filterName: string) => {
-    setActiveFilters(currentFilters => {
-      const newFilters = new Set(currentFilters);
-      newFilters.has(filterName) ? newFilters.delete(filterName) : newFilters.add(filterName);
-      return newFilters;
-    });
-  };
-
-  const handleSelectAllFilters = () => {
-    setActiveFilters(new Set(Object.keys(COMMON_EXCLUSIONS)));
-  };
+  const handleToggleAll = useCallback((isOpen: boolean) => { setProcessedFileTree(currentTree => toggleAllFolders(currentTree, isOpen)); }, []);
+  const handleToggleFilter = (name: string) => { setActiveFilters(prev => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; }); };
+  const handleSelectAllFilters = () => { setActiveFilters(new Set(Object.keys(COMMON_EXCLUSIONS))); };
 
   const handleToggleOpen = useCallback((id: string) => {
     const entryToToggle = findEntry(processedFileTree, id);
     if (!entryToToggle) return;
-
     const needsToLoad = entryToToggle.kind === 'directory' && entryToToggle.children === undefined;
-
-    // This part, which shows the spinner, is fine.
     const buildNewTree = (nodes: FileSystemEntry[]): FileSystemEntry[] => {
       return nodes.map(entry => {
-        if (entry.id === id) {
-          return { ...entry, isOpen: needsToLoad ? true : !entry.isOpen, isLoadingChildren: needsToLoad };
-        }
-        if (entry.children) {
-          return { ...entry, children: buildNewTree(entry.children) };
-        }
+        if (entry.id === id) return { ...entry, isOpen: needsToLoad ? true : !entry.isOpen, isLoadingChildren: needsToLoad };
+        if (entry.children) return { ...entry, children: buildNewTree(entry.children) };
         return entry;
       });
     };
     const treeWithSpinner = buildNewTree(processedFileTree);
     setProcessedFileTree(treeWithSpinner);
-
     if (needsToLoad) {
       loadAndInsertChildren(treeWithSpinner, id, activeFilters, includeOverrides)
         .then(finalTree => setProcessedFileTree(finalTree))
-        .catch(err => console.error("Failed to load directory children:", err));
+        .catch(err => console.error(err));
     }
   }, [processedFileTree, activeFilters]);
 
   const handlePreviewFile = useCallback((entry: FileSystemEntry) => {
     if (entry.kind !== 'file') return;
-
     setOpenTabs(currentTabs => {
-      if (currentTabs.find(tab => tab.id === entry.id)) {
-        return currentTabs; // Already open, do nothing
-      }
+      if (currentTabs.find(tab => tab.id === entry.id)) return currentTabs;
       return [...currentTabs, entry];
     });
     setActiveTabId(entry.id);
   }, []);
 
-  const handleCloseTab = useCallback((tabIdToClose: TabId) => {
-    const tabIndex = openTabs.findIndex(tab => tab.id === tabIdToClose);
+  const handleCloseTab = useCallback((tabId: TabId) => {
+    const tabIndex = openTabs.findIndex(tab => tab.id === tabId);
     if (tabIndex === -1) return;
-
-    if (activeTabId === tabIdToClose) {
-      const newActiveTabId = openTabs[tabIndex - 1]?.id || 'output';
-      setActiveTabId(newActiveTabId);
-    }
-
-    setOpenTabs(currentTabs => currentTabs.filter(tab => tab.id !== tabIdToClose));
+    if (activeTabId === tabId) setActiveTabId(openTabs[tabIndex - 1]?.id || 'output');
+    setOpenTabs(prev => prev.filter(tab => tab.id !== tabId));
   }, [openTabs, activeTabId]);
 
-  /**
- * Recursively builds a complete in-memory representation of the file tree,
- * loading any un-expanded directories that are selected or indeterminate.
- * This is the new, robust "pre-computation" step.
- */
-  const buildCompleteTree = async (
-    nodes: FileSystemEntry[],
-    activeFilters: Set<string>,
-    includeOverrides: Set<string>
-  ): Promise<FileSystemEntry[]> => {
+  // ... (Keep buildCompleteTree) ...
+  const buildCompleteTree = async (nodes: FileSystemEntry[], activeFilters: Set<string>, includeOverrides: Set<string>): Promise<FileSystemEntry[]> => {
     const newNodes: FileSystemEntry[] = [];
     const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
-
     for (const node of nodes) {
       const isFiltered = filterFns.some(fn => fn(node.path));
-
       if (node.kind === 'file') {
-        // Skip only if filtered AND not manually overridden
         if (isFiltered && !includeOverrides.has(node.id)) continue;
         newNodes.push(node);
         continue;
       }
-
-      // Directories
       const dirHasOverride = hasOverrideUnder(node.path, includeOverrides);
       const skipDir = isFiltered && !dirHasOverride;
-
-      if (skipDir) {
-        // fully filtered and no overridden descendants
-        continue;
-      }
-
-      const mustTraverse =
-        dirHasOverride || node.selected || node.indeterminate;
-
+      if (skipDir) continue;
+      const mustTraverse = dirHasOverride || node.selected || node.indeterminate;
       if (mustTraverse && node.children === undefined) {
         try {
           const rawChildren = await processDirectoryLevel(node.handle as FileSystemDirectoryHandle, node.path);
           const expandedChildren = await buildCompleteTree(rawChildren, activeFilters, includeOverrides);
           newNodes.push({ ...node, children: expandedChildren });
-        } catch {
-          newNodes.push({ ...node, children: [] });
-        }
+        } catch { newNodes.push({ ...node, children: [] }); }
       } else if (node.children) {
         const expandedChildren = await buildCompleteTree(node.children, activeFilters, includeOverrides);
         newNodes.push({ ...node, children: expandedChildren });
-      } else {
-        newNodes.push(node);
-      }
+      } else { newNodes.push(node); }
     }
     return newNodes;
   };
 
+  // ... (Keep handleGenerate) ...
   const handleGenerate = async () => {
     setIsGenerating(true);
-    setGeneratedText('Phase 1: Analyzing all evil plans (this may take a moment for large folders)...');
+    setGeneratedText('Phase 1: Analyzing schemes...');
     setCopySuccess(false);
-
     try {
       const completeTree = await buildCompleteTree(processedFileTree, activeFilters, includeOverrides);
-
-      // --- Recursive logging function ---
-      const logInclusionStatus = (nodes: FileSystemEntry[], indent = '') => {
-        for (const node of nodes) {
-          const exclusionReason = getExclusionReason(node.path, activeFilters);
-
-          if (node.kind === 'file') {
-            const isCode = getPreviewType(node.name) === 'code';
-            const isIncluded = node.selected && isCode && !exclusionReason;
-
-            if (isIncluded) {
-            } else {
-              let reason = "Unknown";
-              if (exclusionReason) reason = `Filtered by '${exclusionReason}'`;
-              else if (!isCode) reason = "Not a code file";
-              else if (!node.selected) reason = "Manually deselected in UI";
-            }
-          } else if (node.kind === 'directory') {
-            const isTraversing = (node.selected || node.indeterminate) && !exclusionReason;
-            if (isTraversing) {
-              if (node.children) {
-                logInclusionStatus(node.children, indent + '  ');
-              }
-            } else {
-              let reason = "Manually deselected in UI";
-              if (exclusionReason) reason = `Filtered by '${exclusionReason}'`;
-            }
-          }
-        }
-      };
-      logInclusionStatus(completeTree);
-      // --- End of new logging logic ---
-
-
-      // The rest of the function remains the same, but now it operates on the fully logged tree.
-      setGeneratedText('Phase 2: Gathering all the necessary gizmos and schematics...');
+      setGeneratedText('Phase 2: Gathering gizmos...');
       const filesToProcess: { path: string, handle: FileSystemFileHandle }[] = [];
-
       const collect = (nodes: FileSystemEntry[]) => {
         for (const node of nodes) {
           if (node.kind === 'file' && node.selected && getPreviewType(node.name) === 'code') {
             filesToProcess.push({ path: node.path, handle: node.handle as FileSystemFileHandle });
           }
-          if (node.kind === 'directory' && node.children && (node.selected || node.indeterminate)) {
-            collect(node.children);
-          }
+          if (node.kind === 'directory' && node.children && (node.selected || node.indeterminate)) collect(node.children);
         }
       };
       collect(completeTree);
-
       if (filesToProcess.length === 0) {
-        setGeneratedText("// My evil scheme resulted in... nothing! Curses!\n// No code files were found based on the current selections and filters.\n// Check the developer console (F12) for a detailed log of why files were skipped.");
+        setGeneratedText("// My evil scheme resulted in... nothing! No code files found.");
         setIsGenerating(false);
-        console.groupEnd(); // Make sure to end the group here too
         return;
       }
-
-      setGeneratedText(`Phase 3: Firing the Gemini-Inator! Combining ${filesToProcess.length} files...`);
+      setGeneratedText(`Phase 3: Firing the Inator! Combining ${filesToProcess.length} files...`);
       let output = '';
       for (const fileInfo of filesToProcess) {
         try {
           const file = await fileInfo.handle.getFile();
           const content = await file.text();
           output += `//--- File: ${fileInfo.path} ---\n\n${content}\n\n`;
-        } catch (err: any) {
-          output += `//--- File: ${fileInfo.path} ---\n\n--- ERROR: CURSE YOU, PERRY THE PLATYPUS! I COULDN'T READ THIS FILE! (${err.message}) ---\n\n`;
-        }
+        } catch (err: any) { output += `//--- File: ${fileInfo.path} ---\n\n--- ERROR: ${err.message} ---\n\n`; }
       }
       setGeneratedText(output);
-
-    } catch (err: any) {
-      setGeneratedText(`// A catastrophic failure has occurred! My evil scheme is in shambles!\n// ${err.message}`);
-      console.error("Error during generation:", err);
-    } finally {
-      console.groupEnd(); // Always close the console group
-      setIsGenerating(false);
-    }
+    } catch (err: any) { setGeneratedText(`// Failure! ${err.message}`); } finally { setIsGenerating(false); }
   };
 
   const handleCopy = () => {
-    const parts = [];
-    if (promptPrefix) parts.push(promptPrefix);
-    if (generatedText) parts.push(generatedText);
-    if (promptSuffix) parts.push(promptSuffix);
-    const textToCopy = parts.join('\n\n');
-
-    if (!textToCopy) return;
-
-    // We know the modern API fails for large text, so we go straight to the
-    // classic method. The key is to make this entire operation as synchronous
-    // as possible to satisfy browser security policies.
-
+    const parts = [promptPrefix, generatedText, promptSuffix].filter(Boolean).join('\n\n');
+    if (!parts) return;
     const textArea = document.createElement('textarea');
-    textArea.value = textToCopy;
-
-    // Style the textarea to be invisible but still part of the DOM
-    textArea.style.position = 'fixed';
-    textArea.style.top = '-9999px';
-    textArea.style.left = '-9999px';
-    textArea.style.width = '2em';
-    textArea.style.height = '2em';
-    textArea.style.padding = '0';
-    textArea.style.border = 'none';
-    textArea.style.outline = 'none';
-    textArea.style.boxShadow = 'none';
-    textArea.style.background = 'transparent';
-
+    textArea.value = parts;
+    textArea.style.position = 'fixed'; textArea.style.left = '-9999px';
     document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-
-    let successful = false;
-    try {
-      // This is the critical moment. We call execCommand synchronously.
-      successful = document.execCommand('copy');
-    } catch (err) {
-      console.error('An exception occurred during the copy command:', err);
-      // Ensure 'successful' is false if an error is thrown.
-      successful = false;
-    } finally {
-      // Crucially, we clean up the textarea immediately, regardless of success.
-      document.body.removeChild(textArea);
-    }
-
-    // ONLY AFTER the browser-sensitive operation is completely finished,
-    // do we trigger any React state updates.
-    if (successful) {
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    } else {
-      // If even this fails, the browser's restrictions are too great.
-      setError("My ultimate scheme... copying... has been foiled! The browser blocked the copy command. This can sometimes be fixed by a page refresh.");
-      console.error('Fallback copy method failed. This is likely a browser security restriction.');
-    }
+    textArea.focus(); textArea.select();
+    try { if (document.execCommand('copy')) { setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); } }
+    catch (e) { setError("Copy failed."); }
+    finally { document.body.removeChild(textArea); }
   };
 
-  return (
-    <div className="min-h-screen p-4 font-sans text-white bg-gray-900 sm:p-6">
-      <div className="max-w-[96rem] mx-auto">
-        <header className="mb-6 text-center">
-          <h1 className="text-3xl font-bold text-indigo-400 sm:text-4xl">Behold, the Gemini-Inator!</h1>
-          <p className="max-w-3xl mx-auto mt-2 text-gray-400">
-            Tired of tedious copy-pasting? My tragic backstory involves a single, misplaced semicolon. But no more! With this device, I will combine any project's code into ONE MIGHTY TEXT FILE! And then... I will finally take over the ENTIRE TRI-STATE AREA'S CODEBASE!
-          </p>
-        </header>
+  // Calculate stats for TokenBar
+  const { charCount, tokenCount } = useMemo(() => {
+    const parts = [promptPrefix, generatedText, promptSuffix].filter(Boolean).join('\n\n');
+    const chars = parts.length;
+    return { charCount: chars, tokenCount: Math.ceil(chars / 4) };
+  }, [generatedText, promptPrefix, promptSuffix]);
 
+  return (
+    <div className="flex flex-col h-screen overflow-hidden text-gray-300 font-sans selection:bg-purple-500/30 selection:text-white">
+      <TopBar
+        directoryName={directoryName}
+        onSelectFolder={handleSelectFolder}
+        isLoading={isLoading}
+        onGenerate={handleGenerate}
+        isGenerating={isGenerating}
+        hasFiles={initialFileTree.length > 0}
+        charCount={charCount}
+        tokenCount={tokenCount}
+      />
+
+      <main className="flex-grow flex overflow-hidden p-4 pt-2 gap-4">
         {error && (
-          <div className="max-w-4xl px-4 py-3 mx-auto mb-6 text-red-300 border border-red-700 rounded-lg bg-red-900/50" role="alert">
-            <strong className="font-bold">Curse you, Perry the Platypus! </strong>
-            <span className="block sm:inline">{error}</span>
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-4 bg-red-900/90 border border-red-500 rounded-lg shadow-2xl text-white backdrop-blur-md">
+            <div className="font-bold mb-1">Error!</div>
+            {error}
+            <button onClick={() => setError(null)} className="absolute top-2 right-2 p-1 hover:bg-red-800 rounded"><LucideX size={16} /></button>
           </div>
         )}
 
-        <main className="border border-gray-700 rounded-xl overflow-hidden shadow-2xl bg-gray-800/20">
-          {initialFileTree.length === 0 ? (
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`flex flex-col items-center justify-center min-h-[60vh] transition-colors duration-300 ${isDraggingOver ? 'bg-indigo-900/40' : ''
-                }`}
-            >
-              <div className={`p-10 border-2 border-dashed rounded-xl transition-all duration-300 ${isDraggingOver ? 'border-indigo-400 scale-105' : 'border-gray-600'
-                }`}>
-                <ControlPanel
-                  onSelectFolder={handleSelectFolder}
-                  isLoading={isLoading}
-                  activeFilters={activeFilters}
-                  onToggleFilter={handleToggleFilter}
-                  onSelectAllFilters={handleSelectAllFilters}
-                />
+        {initialFileTree.length === 0 ? (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`flex-grow flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 ${isDraggingOver ? 'border-purple-500 bg-purple-900/20 scale-[0.99]' : 'border-gray-700 bg-gray-900/30'}`}
+          >
+            <div className="p-12 text-center max-w-lg">
+              <div className="mb-6 inline-flex p-6 rounded-full bg-gray-800/50 shadow-2xl ring-1 ring-white/10">
+                <LucideFolderOpen size={64} className="text-purple-400" />
               </div>
-              <p className="mt-6 text-gray-400 font-semibold">
-                {isDraggingOver ? "Yes! Drop the folder here to begin!" : "Push the button, or drag and drop a folder to begin."}
+              <h2 className="text-3xl font-bold text-white mb-4">No Target Acquired</h2>
+              <p className="text-gray-400 mb-8 text-lg">
+                Drag and drop a folder here to begin your evil scheme, or use the button above.
               </p>
+              <button
+                onClick={handleSelectFolder}
+                className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-lg shadow-purple-900/50 transition-all hover:scale-105"
+              >
+                Select Folder
+              </button>
             </div>
-          ) : (
-            <PanelGroup direction="horizontal" className="min-h-[80vh]">
-              {/* --- Panel 1: The Control-Inators --- */}
-              <Panel defaultSize={25} minSize={20}>
-                <div className="h-full p-1 overflow-y-auto">
-                  <ControlPanel
-                    onSelectFolder={handleSelectFolder}
-                    isLoading={isLoading}
-                    activeFilters={activeFilters}
-                    onToggleFilter={handleToggleFilter}
-                    onSelectAllFilters={handleSelectAllFilters}
-                  />
-                </div>
-              </Panel>
+          </div>
+        ) : (
+          <PanelGroup direction="horizontal" className="h-full">
+            {/* Sidebar: File Tree */}
+            <Panel defaultSize={25} minSize={15} maxSize={40} className="flex flex-col">
+              <Sidebar
+                fileTree={processedFileTree}
+                filterText={filterText}
+                onFilterTextChange={setFilterText}
+                onToggleSelection={handleToggleSelection}
+                onToggleOpen={handleToggleOpen}
+                onToggleAll={handleToggleAll}
+                onPreviewFile={handlePreviewFile}
+                activeFilters={activeFilters}
+                onToggleFilter={handleToggleFilter}
+                onSelectAllFilters={handleSelectAllFilters}
+              />
+            </Panel>
 
-              <PanelResizeHandle className="w-2 bg-gray-800/50 hover:bg-indigo-500/50 transition-colors duration-200" />
+            <PanelResizeHandle className="w-1.5 mx-1 rounded bg-gray-800 hover:bg-purple-500/50 transition-colors cursor-col-resize" />
 
-              {/* --- Panel 2: The File Gizmos --- */}
-              <Panel defaultSize={30} minSize={20}>
-                <div className="h-full p-1 overflow-y-auto">
-                  <FileExplorer
-                    directoryName={directoryName}
-                    fileTree={processedFileTree}
-                    filterText={filterText}
-                    onFilterTextChange={setFilterText}
-                    onToggleSelection={handleToggleSelection}
-                    onToggleOpen={handleToggleOpen}
-                    onToggleAll={handleToggleAll}
-                    onPreviewFile={handlePreviewFile}
-                  />
-                </div>
-              </Panel>
-
-              <PanelResizeHandle className="w-2 bg-gray-800/50 hover:bg-indigo-500/50 transition-colors duration-200" />
-
-              {/* --- Panel 3: The Output/Preview Thingy --- */}
-              <Panel defaultSize={45} minSize={20}>
-                <WorkAreaPanel
-                  openTabs={openTabs}
-                  activeTabId={activeTabId}
-                  onTabClick={setActiveTabId}
-                  onCloseTab={handleCloseTab}
-                >
-                  <OutputPanel
-                    generatedText={generatedText}
-                    isGenerating={isGenerating}
-                    hasFiles={initialFileTree.length > 0}
-                    onGenerate={handleGenerate}
-                    onCopy={handleCopy}
-                    copySuccess={copySuccess}
-                    promptPrefix={promptPrefix}
-                    onPromptPrefixChange={setPromptPrefix}
-                    promptSuffix={promptSuffix}
-                    onPromptSuffixChange={setPromptSuffix}
-                  />
-                </WorkAreaPanel>
-              </Panel>
-            </PanelGroup>
-          )}
-        </main>
-      </div>
+            {/* Main Area: Preview & Output */}
+            <Panel defaultSize={75} minSize={30}>
+              <WorkAreaPanel
+                openTabs={openTabs}
+                activeTabId={activeTabId}
+                onTabClick={setActiveTabId}
+                onCloseTab={handleCloseTab}
+              >
+                <OutputPanel
+                  generatedText={generatedText}
+                  promptPrefix={promptPrefix}
+                  onPromptPrefixChange={setPromptPrefix}
+                  promptSuffix={promptSuffix}
+                  onPromptSuffixChange={setPromptSuffix}
+                  onCopy={handleCopy}
+                  copySuccess={copySuccess}
+                />
+              </WorkAreaPanel>
+            </Panel>
+          </PanelGroup>
+        )}
+      </main>
     </div>
   );
 }
