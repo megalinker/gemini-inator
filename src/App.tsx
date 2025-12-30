@@ -1,12 +1,15 @@
+//--- File: src/App.tsx ---
+
 import React, { useState, useCallback, useMemo, useRef, useEffect, ReactNode } from 'react';
 import {
   LucideFolder, LucideX, LucideFile, LucideChevronDown, LucideChevronRight,
   LucideCopy, LucideLoader2, LucideSearch, LucideChevronsRight, LucideChevronsLeft,
-  LucideFolderOpen, LucideZap, LucideCode2, LucideSettings, LucideFileCode
+  LucideFolderOpen, LucideZap, LucideCode2, LucideSettings, LucideFileCode, LucidePlus, LucideBriefcase
 } from 'lucide-react';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-// ... (Keep all your language imports here) ...
+
+// ... (Language imports - keep these exactly as they were) ...
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
@@ -29,13 +32,12 @@ import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
-// ... (Keep languagesToRegister and COMMON_EXCLUSIONS exactly as they are) ...
 const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql, yaml, };
 Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
 
-// ... (Keep COMMON_EXCLUSIONS exactly as is) ...
+// ... (COMMON_EXCLUSIONS - keep exactly as they were) ...
 const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Node Modules': (path: string) => path === 'node_modules' || path.startsWith('node_modules/'),
   'Dist/Build': (path: string) => ['dist', 'build'].some(dir => path === dir || path.startsWith(`${dir}/`)),
@@ -52,23 +54,23 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Compressed Files': (path: string) => ['.rar', '.zip'].some(ext => path.toLowerCase().endsWith(ext)),
   'Image Files': (path: string) => ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'].some(ext => path.toLowerCase().endsWith(ext)),
   'Next.js Build (.next/out)': (p) =>
-    p === '.next' || p.startsWith('.next/') || // Next.js build output
-    p === 'out' || p.startsWith('out/'),     // `next export` output
+    p === '.next' || p.startsWith('.next/') ||
+    p === 'out' || p.startsWith('out/'),
   'Vercel & Turbo Caches': (p) =>
-    p === '.vercel' || p.startsWith('.vercel/') || // Vercel CLI project metadata
-    p === '.turbo' || p.startsWith('.turbo/'),    // Turborepo local cache
+    p === '.vercel' || p.startsWith('.vercel/') ||
+    p === '.turbo' || p.startsWith('.turbo/'),
   'pnpm Store/Artifacts': (p) =>
-    p === '.pnpm' || p.startsWith('.pnpm/') ||                    // sometimes present
-    p.startsWith('node_modules/.pnpm/') ||                        // pnpm’s content-addressed store in project
+    p === '.pnpm' || p.startsWith('.pnpm/') ||
+    p.startsWith('node_modules/.pnpm/') ||
     p.endsWith('pnpm-debug.log'),
   'pnpm Lock & Workspace': (p) =>
     p.endsWith('pnpm-lock.yaml') || p.endsWith('pnpm-workspace.yaml'),
   'GitHub (.github)': (p) => p === '.github' || p.startsWith('.github/'),
   'Cloudflare Wrangler': (p) =>
-    p === '.wrangler' || p.startsWith('.wrangler/') ||  // local state dir
-    p.endsWith('wrangler.toml') ||                      // config file (works in monorepos too)
-    p.endsWith('wrangler.json') ||                      // rarely used alt config
-    p.endsWith('.dev.vars'),                            // local env for `wrangler dev`
+    p === '.wrangler' || p.startsWith('.wrangler/') ||
+    p.endsWith('wrangler.toml') ||
+    p.endsWith('wrangler.json') ||
+    p.endsWith('.dev.vars'),
   'JSON Files': (p: string) => p.toLowerCase().endsWith('.json'),
   'Husky Hooks': (p: string) =>
     p === '.husky' || p.startsWith('.husky/') ||
@@ -77,7 +79,7 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
     p.endsWith('.huskyrc.json') || p.endsWith('.huskyrc.ts'),
 };
 
-// ... (Keep Type Definitions and Helper Functions exactly as they are) ...
+// ... (Helper types/funcs - keep exactly as they were) ...
 interface FileSystemEntry {
   id: string;
   name: string;
@@ -107,6 +109,25 @@ interface WorkAreaPanelProps {
   onTabClick: (id: TabId) => void;
   onCloseTab: (id: TabId) => void;
   children: ReactNode;
+}
+
+// --- NEW TYPES FOR MULTI-SESSION ---
+interface ProjectSession {
+  id: string;
+  name: string;
+  handle: FileSystemDirectoryHandle;
+  initialTree: FileSystemEntry[];
+  processedTree: FileSystemEntry[];
+  includeOverrides: Set<string>;
+  openTabs: FileSystemEntry[];
+  activeTabId: TabId;
+  promptPrefix: string;
+  promptSuffix: string;
+  generatedText: string;
+  filterText: string;
+  isLoading: boolean;
+  isGenerating: boolean;
+  copySuccess: boolean;
 }
 
 const hasOverrideUnder = (dirPath: string, overrides: Set<string>) => {
@@ -348,7 +369,7 @@ const getLanguageForPreview = (filename: string): string => {
   }
 };
 
-// --- NEW COMPONENTS ---
+// --- COMPONENTS ---
 
 const IndeterminateCheckbox: React.FC<{
   checked: boolean;
@@ -370,86 +391,144 @@ const IndeterminateCheckbox: React.FC<{
   );
 };
 
-// New Component: Displays token usage visually
-const TokenBar: React.FC<{ charCount: number, tokenCount: number }> = ({ charCount, tokenCount }) => {
+const TokenBar: React.FC<{ charCount: number, tokenCount: number }> = React.memo(({ charCount, tokenCount }) => {
   const LIMITS = [
     { label: '32k', val: 32000 },
     { label: '128k', val: 128000 },
     { label: '1M', val: 1000000 }
   ];
 
-  // Find the next active limit
   const activeLimit = LIMITS.find(l => tokenCount < l.val) || LIMITS[LIMITS.length - 1];
   const percent = Math.min((tokenCount / activeLimit.val) * 100, 100);
 
   return (
-    <div className="flex flex-col w-full max-w-md">
-      <div className="flex justify-between text-xs text-gray-400 mb-1 font-mono">
-        <span>{tokenCount.toLocaleString()} tokens</span>
-        <span>Limit: {activeLimit.label}</span>
+    <div className="flex flex-col w-36 group cursor-help select-none">
+      <div className="flex justify-between text-[10px] text-gray-400 font-mono mb-1 uppercase tracking-wider">
+        <span className="text-purple-300 font-bold">{tokenCount.toLocaleString()}</span>
+        <span className="opacity-50">/ {activeLimit.label}</span>
       </div>
-      <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden border border-gray-700">
+      <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden border border-gray-700/50">
         <div
-          className={`h-full transition-all duration-500 ${percent > 90 ? 'bg-red-500' : 'bg-green-500'}`}
+          className={`h-full transition-all duration-500 ${percent > 90 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-gradient-to-r from-purple-600 to-indigo-500'}`}
           style={{ width: `${percent}%` }}
         />
       </div>
     </div>
   );
-};
+});
 
-// New Component: Top Navigation Bar
+// Component: Top Navigation Bar with Tabs
 const TopBar: React.FC<{
-  directoryName: string | null;
+  sessions: ProjectSession[];
+  activeSessionId: string | null;
+  onSwitchSession: (id: string) => void;
+  onCloseSession: (id: string) => void;
   onSelectFolder: () => void;
-  isLoading: boolean;
   onGenerate: () => void;
   isGenerating: boolean;
-  hasFiles: boolean;
-  charCount: number;
-  tokenCount: number;
-}> = ({ directoryName, onSelectFolder, isLoading, onGenerate, isGenerating, hasFiles, charCount, tokenCount }) => (
-  <div className="glass-header h-16 px-6 flex items-center justify-between shrink-0 z-20">
-    <div className="flex items-center gap-4">
-      <div className="flex items-center gap-2">
-        <div className="p-2 bg-purple-900/50 rounded-lg border border-purple-500/30">
-          <LucideZap className="text-purple-400" size={20} />
+  activeSession?: ProjectSession;
+}> = ({ sessions, activeSessionId, onSwitchSession, onCloseSession, onSelectFolder, onGenerate, isGenerating, activeSession }) => {
+
+  const { charCount, tokenCount } = useMemo(() => {
+    if (!activeSession) return { charCount: 0, tokenCount: 0 };
+    const parts = [activeSession.promptPrefix, activeSession.generatedText, activeSession.promptSuffix].filter(Boolean).join('\n\n');
+    const chars = parts.length;
+    return { charCount: chars, tokenCount: Math.ceil(chars / 4) };
+  }, [activeSession?.generatedText, activeSession?.promptPrefix, activeSession?.promptSuffix]);
+
+  return (
+    <div className="glass-header h-14 flex items-center justify-between shrink-0 z-20 gap-4 select-none relative border-b border-purple-900/30">
+
+      {/* 1. Left: Branding & Controls */}
+      <div className="flex items-center pl-4 shrink-0">
+        <div className="flex items-center gap-2.5 mr-6">
+          <div className="p-1.5 bg-gradient-to-br from-purple-900/80 to-indigo-900/80 rounded-md border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)] group">
+            <LucideZap className="text-purple-300 group-hover:text-yellow-300 transition-colors" size={18} />
+          </div>
+          <div className="hidden md:block">
+            <h1 className="font-bold text-gray-100 text-sm tracking-tight">Gemini-Inator <span className="text-purple-400 text-[10px] align-top">3000</span></h1>
+            <p className="text-[9px] text-gray-500 leading-none -mt-0.5">Evil Inc.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="font-bold text-white leading-tight">Gemini-Inator</h1>
-          <p className="text-xs text-gray-400 font-mono">Evil Inc. Code Aggregator</p>
+
+        <div className="h-6 w-px bg-gray-800 mr-4" />
+
+        <button
+          onClick={onSelectFolder}
+          className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-800/50 text-gray-400 hover:bg-purple-600 hover:text-white border border-gray-700 hover:border-purple-500 transition-all shadow-sm hover:shadow-[0_0_10px_rgba(147,51,234,0.3)]"
+          title="New Scheme Target"
+        >
+          <LucidePlus size={16} />
+        </button>
+      </div>
+
+      {/* 2. Middle: Scrollable Tabs */}
+      <div className="flex-1 flex items-center overflow-x-auto custom-scrollbar px-2 mask-linear-fade h-full">
+        <div className="flex items-center gap-1.5 h-9">
+          {sessions.map(session => {
+            const isActive = activeSessionId === session.id;
+            return (
+              <div
+                key={session.id}
+                onClick={() => onSwitchSession(session.id)}
+                className={`
+                  group relative flex items-center gap-2 px-3 pl-3 pr-2 h-full rounded-md border cursor-pointer transition-all min-w-[140px] max-w-[220px]
+                  ${isActive
+                    ? 'bg-gray-800/90 border-purple-500/30 text-gray-100 shadow-[0_4px_6px_-1px_rgba(0,0,0,0.1)]'
+                    : 'bg-transparent border-transparent text-gray-500 hover:bg-gray-800/30 hover:text-gray-300 hover:border-gray-800'
+                  }
+                `}
+              >
+                <LucideBriefcase size={13} className={`shrink-0 ${isActive ? "text-purple-400" : "text-gray-600 group-hover:text-gray-500"}`} />
+                <span className="text-xs font-medium truncate flex-1 pt-0.5">{session.name}</span>
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCloseSession(session.id); }}
+                  className={`
+                    p-0.5 rounded-md hover:bg-red-500/20 hover:text-red-400 transition-all
+                    ${isActive ? 'opacity-100 text-gray-500' : 'opacity-0 group-hover:opacity-100 text-gray-600'}
+                  `}
+                >
+                  <LucideX size={12} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
-      <div className="h-8 w-px bg-gray-700 mx-2" />
-      <button
-        onClick={onSelectFolder}
-        disabled={isLoading}
-        className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-sm font-medium transition-all text-gray-200"
-      >
-        {isLoading ? <LucideLoader2 className="animate-spin mr-2" size={16} /> : <LucideFolderOpen className="mr-2" size={16} />}
-        {directoryName ? directoryName : "Select Target"}
-      </button>
-    </div>
 
-    <div className="flex items-center gap-6">
-      {hasFiles && <TokenBar charCount={charCount} tokenCount={tokenCount} />}
-      <button
-        onClick={onGenerate}
-        disabled={isGenerating || !hasFiles}
-        // Added 'whitespace-nowrap' to the className string below
-        className={`flex items-center px-6 py-2 rounded-lg font-bold text-white shadow-lg transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${isGenerating ? 'bg-gray-700' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 animate-glow'}`}
-      >
-        {isGenerating ? (
-          <><LucideLoader2 className="mr-2 animate-spin" /> Processing...</>
-        ) : (
-          <><LucideZap className="mr-2 fill-current" /> FIRE INATOR</>
+      {/* 3. Right: Stats & Action */}
+      <div className="flex items-center gap-5 pr-4 pl-4 bg-gradient-to-l from-[#0f172a] via-[#0f172a] to-transparent shrink-0 h-full">
+        {activeSession && activeSession.initialTree.length > 0 && (
+          <TokenBar charCount={charCount} tokenCount={tokenCount} />
         )}
-      </button>
-    </div>
-  </div>
-);
 
-// Refactored: Sidebar with Chips for filters
+        <button
+          onClick={onGenerate}
+          disabled={!activeSession || isGenerating || activeSession.initialTree.length === 0}
+          className={`
+            relative overflow-hidden flex items-center px-5 py-1.5 rounded-md font-bold text-xs text-white shadow-lg transition-all 
+            disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale
+            ${isGenerating
+              ? 'bg-gray-800 border border-gray-700 cursor-wait'
+              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 hover:shadow-[0_0_15px_rgba(124,58,237,0.4)] border border-transparent'
+            }
+          `}
+        >
+          <div className="relative z-10 flex items-center gap-2">
+            {isGenerating ? (
+              <LucideLoader2 className="animate-spin text-purple-200" size={14} />
+            ) : (
+              <LucideZap className="fill-current text-purple-100" size={14} />
+            )}
+            <span className="tracking-wide font-bold uppercase">{isGenerating ? 'CONCOCTING...' : 'BEHOLD!'}</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const Sidebar: React.FC<{
   fileTree: FileSystemEntry[];
   filterText: string;
@@ -670,6 +749,42 @@ const PreviewPanel: React.FC<{
   );
 };
 
+// --- OPTIMIZED OUTPUT VIEWER ---
+// This component is wrapped in React.memo to prevent re-rendering the heavy SyntaxHighlighter
+// when the user types in the prefix/suffix textareas.
+// 1. Update MemoizedCodeViewer
+const MemoizedCodeViewer = React.memo(({ generatedText, isTooLarge }: { generatedText: string, isTooLarge: boolean }) => {
+  const FixedSyntaxHighlighter = SyntaxHighlighter as any;
+
+  if (!generatedText) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50 select-none">
+        <LucideCode2 size={48} className="mb-4" />
+        <p>The Inator hasn't fired yet...</p>
+      </div>
+    );
+  }
+
+  if (isTooLarge) {
+    return (
+      <textarea readOnly value={generatedText} className="w-full h-full p-4 bg-transparent text-gray-300 font-mono text-xs border-none resize-none focus:ring-0" />
+    );
+  }
+
+  return (
+    <FixedSyntaxHighlighter
+      language="javascript"
+      style={vscDarkPlus}
+      // overflow-visible allows the PARENT div to handle scrolling
+      customStyle={{ background: 'transparent', margin: 0, padding: '1.5rem', minHeight: '100%', fontSize: '12px', overflow: 'visible' }}
+      wrapLines={true} // Helps with horizontal scrolling issues
+    >
+      {generatedText}
+    </FixedSyntaxHighlighter>
+  );
+});
+
+// 2. Update OutputPanel
 const OutputPanel: React.FC<{
   generatedText: string;
   promptPrefix: string;
@@ -680,68 +795,55 @@ const OutputPanel: React.FC<{
   copySuccess: boolean;
 }> = ({ generatedText, promptPrefix, onPromptPrefixChange, promptSuffix, onPromptSuffixChange, onCopy, copySuccess }) => {
   const SYNTAX_HIGHLIGHT_LIMIT = 200000;
-  const isTooLarge = generatedText.length > SYNTAX_HIGHLIGHT_LIMIT;
-  const FixedSyntaxHighlighter = SyntaxHighlighter as any;
+  const isTooLarge = useMemo(() => generatedText.length > SYNTAX_HIGHLIGHT_LIMIT, [generatedText.length]);
 
   return (
     <div className="flex flex-col h-full bg-gray-900/50">
       <div className="flex-grow flex flex-col min-h-0">
-        {/* Input Areas */}
-        <div className="p-4 space-y-4 border-b border-gray-800 bg-gray-900/30">
+
+        {/* Prefix Input Area */}
+        <div className="p-4 space-y-4 border-b border-gray-800 bg-gray-900/30 shrink-0">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Context / Prefix</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Evil Context (Prefix)</label>
             <textarea
               value={promptPrefix}
               onChange={(e) => onPromptPrefixChange(e.target.value)}
-              placeholder="E.g., 'You are an expert React developer. Analyze this code...'"
-              className="w-full p-2 text-sm bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-1 focus:ring-purple-500 outline-none resize-none h-16 transition-all"
+              placeholder="e.g., 'Ah, Perry the Platypus! Analyze this React code and tell me why my traps aren't working...'"
+              className="w-full p-2 text-sm bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-1 focus:ring-purple-500 outline-none resize-none h-16 transition-all placeholder:text-gray-600"
             />
           </div>
         </div>
 
-        {/* Output Area */}
-        <div className="relative flex-grow min-h-0 overflow-hidden">
+        {/* Output Area - SCROLL FIX HERE */}
+        <div className="relative flex-grow min-h-0">
           <div className="absolute top-2 right-4 z-10">
             <button
               onClick={onCopy}
               disabled={!generatedText}
-              className={`flex items-center px-3 py-1.5 text-xs font-medium rounded-md shadow-lg transition-all ${copySuccess ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600'}`}
+              className={`flex items-center px-3 py-1.5 text-xs font-bold rounded-md shadow-lg transition-all ${copySuccess ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600'}`}
             >
-              {copySuccess ? <span className="mr-1">Stolen!</span> : <LucideCopy size={14} className="mr-1.5" />}
-              {copySuccess ? '' : 'Copy to Clipboard'}
+              {copySuccess ? <span className="mr-1 uppercase">Stolen!</span> : <LucideCopy size={14} className="mr-1.5" />}
+              {copySuccess ? '' : 'STEAL CODE'}
             </button>
           </div>
 
-          <div className="h-full overflow-hidden custom-scrollbar bg-[#1e1e1e]">
-            {generatedText ? (
-              isTooLarge ? (
-                <textarea readOnly value={generatedText} className="w-full h-full p-4 bg-transparent text-gray-300 font-mono text-xs border-none resize-none focus:ring-0" />
-              ) : (
-                <FixedSyntaxHighlighter
-                  language="javascript"
-                  style={vscDarkPlus}
-                  customStyle={{ background: 'transparent', margin: 0, padding: '1.5rem', minHeight: '100%', fontSize: '12px' }}
-                >
-                  {generatedText}
-                </FixedSyntaxHighlighter>
-              )
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50 select-none">
-                <LucideCode2 size={48} className="mb-4" />
-                <p>Output will appear here...</p>
-              </div>
-            )}
+          {/* 
+              Changed 'overflow-hidden' to 'overflow-auto' (or 'overflow-y-auto')
+              This div allows scrolling of the content inside it. 
+          */}
+          <div className="h-full w-full overflow-auto custom-scrollbar bg-[#1e1e1e]">
+            <MemoizedCodeViewer generatedText={generatedText} isTooLarge={isTooLarge} />
           </div>
         </div>
 
-        {/* Suffix Area */}
-        <div className="p-4 border-t border-gray-800 bg-gray-900/30">
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Final Instructions / Suffix</label>
+        {/* Suffix Input Area */}
+        <div className="p-4 border-t border-gray-800 bg-gray-900/30 shrink-0">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Self-Destruct Instructions (Suffix)</label>
           <textarea
             value={promptSuffix}
             onChange={(e) => onPromptSuffixChange(e.target.value)}
-            placeholder="E.g., 'Find all security vulnerabilities.'"
-            className="w-full p-2 text-sm bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-1 focus:ring-purple-500 outline-none resize-none h-16 transition-all"
+            placeholder="e.g., 'Find the self-destruct button... I mean, bugs.'"
+            className="w-full p-2 text-sm bg-gray-800/50 border border-gray-700 rounded-lg text-gray-200 focus:ring-1 focus:ring-purple-500 outline-none resize-none h-16 transition-all placeholder:text-gray-600"
           />
         </div>
       </div>
@@ -749,7 +851,6 @@ const OutputPanel: React.FC<{
   );
 };
 
-// ... (WorkAreaPanel remains largely the same, but with cleaner tab styles) ...
 const WorkAreaPanel: React.FC<WorkAreaPanelProps> = ({ openTabs, activeTabId, onTabClick, onCloseTab, children }) => {
   const [preview, setPreview] = useState<PreviewState>({ content: '', isLoading: false, error: null, type: 'unsupported' });
   const activeFile = useMemo(() => openTabs.find(tab => tab.id === activeTabId), [openTabs, activeTabId]);
@@ -830,27 +931,17 @@ const WorkAreaPanel: React.FC<WorkAreaPanelProps> = ({ openTabs, activeTabId, on
   );
 };
 
-// ... (Main App Component logic remains mostly the same, just rendering the new layout) ...
+// --- MAIN APP COMPONENT ---
 
 const FILTERS_STORAGE_KEY = 'doofenshmirtz_evil_incorporated_filters';
 
 export default function App() {
-  // ... (Keep all existing state and effects from the previous version) ...
-  const [initialFileTree, setInitialFileTree] = useState<FileSystemEntry[]>([]);
-  const [processedFileTree, setProcessedFileTree] = useState<FileSystemEntry[]>([]);
-  const [directoryName, setDirectoryName] = useState<string | null>(null);
-  const [generatedText, setGeneratedText] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [copySuccess, setCopySuccess] = useState<boolean>(false);
-  const [filterText, setFilterText] = useState<string>('');
-  const [promptPrefix, setPromptPrefix] = useState<string>('');
-  const [promptSuffix, setPromptSuffix] = useState<string>('');
-  const [openTabs, setOpenTabs] = useState<FileSystemEntry[]>([]);
-  const [activeTabId, setActiveTabId] = useState<TabId>('output');
+  const [sessions, setSessions] = useState<ProjectSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
-  const [includeOverrides, setIncludeOverrides] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+
+  // Global filter settings (shared across sessions for now, could be per-session if preferred)
   const [activeFilters, setActiveFilters] = useState<Set<string>>(() => {
     try {
       const savedFilters = window.localStorage.getItem(FILTERS_STORAGE_KEY);
@@ -862,45 +953,61 @@ export default function App() {
     return new Set();
   });
 
-  // ... (Keep processDirectoryAndSetState, buildCompleteTree, and effects) ...
-  const processDirectoryAndSetState = useCallback(async (directoryHandle: FileSystemDirectoryHandle) => {
-    try {
-      setError(null);
-      setOpenTabs([]);
-      setActiveTabId('output');
-      setGeneratedText('');
-      setInitialFileTree([]);
-      setProcessedFileTree([]);
-      setIsLoading(true);
-      setIncludeOverrides(new Set());
-      setDirectoryName(directoryHandle.name);
-      const tree = await processDirectoryLevel(directoryHandle);
-      setInitialFileTree(tree);
-    } catch (err: any) {
-      if (err.name !== 'AbortError') setError(`Scheme failed! ${err.message}`);
-    } finally {
-      setIsLoading(false);
-      setIsDraggingOver(false);
-    }
-  }, []);
+  const activeSession = useMemo(() => sessions.find(s => s.id === activeSessionId), [sessions, activeSessionId]);
 
+  // Persist filters
   useEffect(() => {
     try { window.localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(Array.from(activeFilters))); } catch (e) { }
   }, [activeFilters]);
 
+  // Apply filters to active session whenever filters change
   useEffect(() => {
-    if (initialFileTree.length > 0) {
-      const newlyProcessedTree = applyFiltersAndPreserveOpenState(initialFileTree, activeFilters, includeOverrides);
-      setProcessedFileTree(newlyProcessedTree);
-    }
-  }, [activeFilters, initialFileTree]);
+    if (!activeSessionId) return;
 
-  // ... (Keep handleSelectFolder, handleDragOver, handleDrop, handleToggleSelection, etc.) ...
+    setSessions(prevSessions => prevSessions.map(session => {
+      // Optimization: Only re-process if the filters actually changed state logic
+      // But for simplicity, we re-run the filter logic on the active session tree
+      const newlyProcessedTree = applyFiltersAndPreserveOpenState(
+        session.initialTree,
+        activeFilters,
+        session.includeOverrides
+      );
+      return { ...session, processedTree: newlyProcessedTree };
+    }));
+  }, [activeFilters]);
+
+  const createNewSession = async (directoryHandle: FileSystemDirectoryHandle) => {
+    const id = crypto.randomUUID();
+    const tree = await processDirectoryLevel(directoryHandle);
+    const processedTree = applyFiltersAndPreserveOpenState(tree, activeFilters, new Set());
+
+    const newSession: ProjectSession = {
+      id,
+      name: directoryHandle.name,
+      handle: directoryHandle,
+      initialTree: tree,
+      processedTree,
+      includeOverrides: new Set(),
+      openTabs: [],
+      activeTabId: 'output',
+      promptPrefix: '',
+      promptSuffix: '',
+      generatedText: '',
+      filterText: '',
+      isLoading: false,
+      isGenerating: false,
+      copySuccess: false,
+    };
+
+    setSessions(prev => [...prev, newSession]);
+    setActiveSessionId(id);
+  };
+
   const handleSelectFolder = async () => {
     if (!('showDirectoryPicker' in window)) { setError('Browser not supported.'); return; }
     try {
       const directoryHandle = await window.showDirectoryPicker();
-      await processDirectoryAndSetState(directoryHandle);
+      await createNewSession(directoryHandle);
     } catch (err: any) { if (err.name !== 'AbortError') setError(err.message); }
   };
 
@@ -911,62 +1018,118 @@ export default function App() {
     const items = e.dataTransfer.items;
     if (items && items.length > 0) {
       const handle = await items[0].getAsFileSystemHandle();
-      if (handle && handle.kind === 'directory') await processDirectoryAndSetState(handle as FileSystemDirectoryHandle);
+      if (handle && handle.kind === 'directory') await createNewSession(handle as FileSystemDirectoryHandle);
       else setError("Not a folder!");
     }
   };
 
-  const handleToggleSelection = useCallback((id: string, selected: boolean) => {
-    setProcessedFileTree(currentTree => updateSelectionRecursive(currentTree, id, selected));
-    const entry = findEntry(processedFileTree, id);
-    if (entry && entry.kind === 'file') {
-      setIncludeOverrides(prev => {
-        const next = new Set(prev);
-        if (selected) next.add(id); else next.delete(id);
-        return next;
-      });
-    }
-  }, [processedFileTree]);
+  // Helper to update the current session state
+  const updateActiveSession = (updateFn: (session: ProjectSession) => Partial<ProjectSession>) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        return { ...s, ...updateFn(s) };
+      }
+      return s;
+    }));
+  };
 
-  const handleToggleAll = useCallback((isOpen: boolean) => { setProcessedFileTree(currentTree => toggleAllFolders(currentTree, isOpen)); }, []);
+  // --- Session State Handlers ---
+
+  const handleToggleSelection = useCallback((id: string, selected: boolean) => {
+    if (!activeSessionId) return;
+
+    setSessions(prev => prev.map(session => {
+      if (session.id !== activeSessionId) return session;
+
+      const newProcessedTree = updateSelectionRecursive(session.processedTree, id, selected);
+
+      // Update overrides
+      const newOverrides = new Set(session.includeOverrides);
+      const entry = findEntry(newProcessedTree, id);
+      if (entry && entry.kind === 'file') {
+        if (selected) newOverrides.add(id); else newOverrides.delete(id);
+      }
+
+      return {
+        ...session,
+        processedTree: newProcessedTree,
+        includeOverrides: newOverrides
+      };
+    }));
+  }, [activeSessionId]);
+
+  const handleToggleAll = useCallback((isOpen: boolean) => {
+    updateActiveSession(s => ({ processedTree: toggleAllFolders(s.processedTree, isOpen) }));
+  }, [activeSessionId]);
+
   const handleToggleFilter = (name: string) => { setActiveFilters(prev => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; }); };
   const handleSelectAllFilters = () => { setActiveFilters(new Set(Object.keys(COMMON_EXCLUSIONS))); };
 
   const handleToggleOpen = useCallback((id: string) => {
-    const entryToToggle = findEntry(processedFileTree, id);
-    if (!entryToToggle) return;
-    const needsToLoad = entryToToggle.kind === 'directory' && entryToToggle.children === undefined;
-    const buildNewTree = (nodes: FileSystemEntry[]): FileSystemEntry[] => {
-      return nodes.map(entry => {
-        if (entry.id === id) return { ...entry, isOpen: needsToLoad ? true : !entry.isOpen, isLoadingChildren: needsToLoad };
-        if (entry.children) return { ...entry, children: buildNewTree(entry.children) };
-        return entry;
-      });
-    };
-    const treeWithSpinner = buildNewTree(processedFileTree);
-    setProcessedFileTree(treeWithSpinner);
-    if (needsToLoad) {
-      loadAndInsertChildren(treeWithSpinner, id, activeFilters, includeOverrides)
-        .then(finalTree => setProcessedFileTree(finalTree))
-        .catch(err => console.error(err));
-    }
-  }, [processedFileTree, activeFilters]);
+    if (!activeSessionId) return;
+
+    // Use a functional update to access the latest state safely
+    setSessions(prevSessions => {
+      const sessionIndex = prevSessions.findIndex(s => s.id === activeSessionId);
+      if (sessionIndex === -1) return prevSessions;
+
+      const session = prevSessions[sessionIndex];
+      const entryToToggle = findEntry(session.processedTree, id);
+      if (!entryToToggle) return prevSessions;
+
+      const needsToLoad = entryToToggle.kind === 'directory' && entryToToggle.children === undefined;
+
+      // 1. Immediate update for UI feedback (spinner or toggle)
+      const buildNewTree = (nodes: FileSystemEntry[]): FileSystemEntry[] => {
+        return nodes.map(entry => {
+          if (entry.id === id) return { ...entry, isOpen: needsToLoad ? true : !entry.isOpen, isLoadingChildren: needsToLoad };
+          if (entry.children) return { ...entry, children: buildNewTree(entry.children) };
+          return entry;
+        });
+      };
+
+      const treeWithSpinner = buildNewTree(session.processedTree);
+
+      const updatedSessions = [...prevSessions];
+      updatedSessions[sessionIndex] = { ...session, processedTree: treeWithSpinner };
+
+      // 2. Async load if needed (Side effect inside handler - unusual but effective for this structure)
+      if (needsToLoad) {
+        loadAndInsertChildren(treeWithSpinner, id, activeFilters, session.includeOverrides)
+          .then(finalTree => {
+            setSessions(current => current.map(s =>
+              s.id === activeSessionId ? { ...s, processedTree: finalTree } : s
+            ));
+          })
+          .catch(err => console.error(err));
+      }
+
+      return updatedSessions;
+    });
+  }, [activeSessionId, activeFilters]);
 
   const handlePreviewFile = useCallback((entry: FileSystemEntry) => {
     if (entry.kind !== 'file') return;
-    setOpenTabs(currentTabs => {
-      if (currentTabs.find(tab => tab.id === entry.id)) return currentTabs;
-      return [...currentTabs, entry];
+    updateActiveSession(s => {
+      if (s.openTabs.find(tab => tab.id === entry.id)) return { activeTabId: entry.id };
+      return { openTabs: [...s.openTabs, entry], activeTabId: entry.id };
     });
-    setActiveTabId(entry.id);
-  }, []);
+  }, [activeSessionId]);
 
   const handleCloseTab = useCallback((tabId: TabId) => {
-    const tabIndex = openTabs.findIndex(tab => tab.id === tabId);
-    if (tabIndex === -1) return;
-    if (activeTabId === tabId) setActiveTabId(openTabs[tabIndex - 1]?.id || 'output');
-    setOpenTabs(prev => prev.filter(tab => tab.id !== tabId));
-  }, [openTabs, activeTabId]);
+    updateActiveSession(s => {
+      const tabIndex = s.openTabs.findIndex(tab => tab.id === tabId);
+      if (tabIndex === -1) return {};
+      let newActiveId = s.activeTabId;
+      if (s.activeTabId === tabId) newActiveId = s.openTabs[tabIndex - 1]?.id || 'output';
+      return {
+        openTabs: s.openTabs.filter(tab => tab.id !== tabId),
+        activeTabId: newActiveId
+      };
+    });
+  }, [activeSessionId]);
+
+  const handleTabClick = (id: TabId) => updateActiveSession(() => ({ activeTabId: id }));
 
   // ... (Keep buildCompleteTree) ...
   const buildCompleteTree = async (nodes: FileSystemEntry[], activeFilters: Set<string>, includeOverrides: Set<string>): Promise<FileSystemEntry[]> => {
@@ -997,14 +1160,14 @@ export default function App() {
     return newNodes;
   };
 
-  // ... (Keep handleGenerate) ...
   const handleGenerate = async () => {
-    setIsGenerating(true);
-    setGeneratedText('Phase 1: Analyzing schemes...');
-    setCopySuccess(false);
+    if (!activeSession) return;
+    updateActiveSession(() => ({ isGenerating: true, generatedText: 'Phase 1: Analyzing schemes...' }));
+
     try {
-      const completeTree = await buildCompleteTree(processedFileTree, activeFilters, includeOverrides);
-      setGeneratedText('Phase 2: Gathering gizmos...');
+      const completeTree = await buildCompleteTree(activeSession.processedTree, activeFilters, activeSession.includeOverrides);
+      updateActiveSession(() => ({ generatedText: 'Phase 2: Gathering gizmos...' }));
+
       const filesToProcess: { path: string, handle: FileSystemFileHandle }[] = [];
       const collect = (nodes: FileSystemEntry[]) => {
         for (const node of nodes) {
@@ -1015,12 +1178,14 @@ export default function App() {
         }
       };
       collect(completeTree);
+
       if (filesToProcess.length === 0) {
-        setGeneratedText("// My evil scheme resulted in... nothing! No code files found.");
-        setIsGenerating(false);
+        updateActiveSession(() => ({ generatedText: "// My evil scheme resulted in... nothing! No code files found.", isGenerating: false }));
         return;
       }
-      setGeneratedText(`Phase 3: Firing the Inator! Combining ${filesToProcess.length} files...`);
+
+      updateActiveSession(() => ({ generatedText: `Phase 3: Firing the Inator! Combining ${filesToProcess.length} files...` }));
+
       let output = '';
       for (const fileInfo of filesToProcess) {
         try {
@@ -1029,41 +1194,52 @@ export default function App() {
           output += `//--- File: ${fileInfo.path} ---\n\n${content}\n\n`;
         } catch (err: any) { output += `//--- File: ${fileInfo.path} ---\n\n--- ERROR: ${err.message} ---\n\n`; }
       }
-      setGeneratedText(output);
-    } catch (err: any) { setGeneratedText(`// Failure! ${err.message}`); } finally { setIsGenerating(false); }
+      updateActiveSession(() => ({ generatedText: output, isGenerating: false }));
+    } catch (err: any) {
+      updateActiveSession(() => ({ generatedText: `// Failure! ${err.message}`, isGenerating: false }));
+    }
   };
 
   const handleCopy = () => {
-    const parts = [promptPrefix, generatedText, promptSuffix].filter(Boolean).join('\n\n');
+    if (!activeSession) return;
+    const parts = [activeSession.promptPrefix, activeSession.generatedText, activeSession.promptSuffix].filter(Boolean).join('\n\n');
     if (!parts) return;
     const textArea = document.createElement('textarea');
     textArea.value = parts;
     textArea.style.position = 'fixed'; textArea.style.left = '-9999px';
     document.body.appendChild(textArea);
     textArea.focus(); textArea.select();
-    try { if (document.execCommand('copy')) { setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); } }
+    try {
+      if (document.execCommand('copy')) {
+        updateActiveSession(() => ({ copySuccess: true }));
+        setTimeout(() => updateActiveSession(() => ({ copySuccess: false })), 2000);
+      }
+    }
     catch (e) { setError("Copy failed."); }
     finally { document.body.removeChild(textArea); }
   };
 
-  // Calculate stats for TokenBar
-  const { charCount, tokenCount } = useMemo(() => {
-    const parts = [promptPrefix, generatedText, promptSuffix].filter(Boolean).join('\n\n');
-    const chars = parts.length;
-    return { charCount: chars, tokenCount: Math.ceil(chars / 4) };
-  }, [generatedText, promptPrefix, promptSuffix]);
+  const closeSession = (id: string) => {
+    setSessions(prev => {
+      const remaining = prev.filter(s => s.id !== id);
+      if (activeSessionId === id) {
+        setActiveSessionId(remaining.length > 0 ? remaining[remaining.length - 1].id : null);
+      }
+      return remaining;
+    });
+  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden text-gray-300 font-sans selection:bg-purple-500/30 selection:text-white">
       <TopBar
-        directoryName={directoryName}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSwitchSession={setActiveSessionId}
+        onCloseSession={closeSession}
         onSelectFolder={handleSelectFolder}
-        isLoading={isLoading}
         onGenerate={handleGenerate}
-        isGenerating={isGenerating}
-        hasFiles={initialFileTree.length > 0}
-        charCount={charCount}
-        tokenCount={tokenCount}
+        isGenerating={activeSession?.isGenerating || false}
+        activeSession={activeSession}
       />
 
       <main className="flex-grow flex overflow-hidden p-4 pt-2 gap-4">
@@ -1075,7 +1251,7 @@ export default function App() {
           </div>
         )}
 
-        {initialFileTree.length === 0 ? (
+        {!activeSession ? (
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -1083,18 +1259,20 @@ export default function App() {
             className={`flex-grow flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 ${isDraggingOver ? 'border-purple-500 bg-purple-900/20 scale-[0.99]' : 'border-gray-700 bg-gray-900/30'}`}
           >
             <div className="p-12 text-center max-w-lg">
-              <div className="mb-6 inline-flex p-6 rounded-full bg-gray-800/50 shadow-2xl ring-1 ring-white/10">
-                <LucideFolderOpen size={64} className="text-purple-400" />
+              <div className="mb-6 inline-flex p-6 rounded-full bg-gray-800/50 shadow-2xl ring-1 ring-white/10 group">
+                <LucideFolderOpen size={64} className="text-purple-400 group-hover:scale-110 transition-transform duration-300" />
               </div>
-              <h2 className="text-3xl font-bold text-white mb-4">No Target Acquired</h2>
+              <h2 className="text-3xl font-bold text-white mb-4">Ah, Perry the Platypus!</h2>
               <p className="text-gray-400 mb-8 text-lg">
-                Drag and drop a folder here to begin your evil scheme, or use the button above.
+                You've discovered my <span className="text-purple-400 font-mono">Code-Aggregator-Inator</span>!
+                <br />
+                Drag a folder here to begin my evil scheme!
               </p>
               <button
                 onClick={handleSelectFolder}
-                className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-lg shadow-purple-900/50 transition-all hover:scale-105"
+                className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-lg shadow-purple-900/50 transition-all hover:scale-105 uppercase tracking-wide"
               >
-                Select Folder
+                Select Target Area
               </button>
             </div>
           </div>
@@ -1103,9 +1281,9 @@ export default function App() {
             {/* Sidebar: File Tree */}
             <Panel defaultSize={25} minSize={15} maxSize={40} className="flex flex-col">
               <Sidebar
-                fileTree={processedFileTree}
-                filterText={filterText}
-                onFilterTextChange={setFilterText}
+                fileTree={activeSession.processedTree}
+                filterText={activeSession.filterText}
+                onFilterTextChange={(txt) => updateActiveSession(() => ({ filterText: txt }))}
                 onToggleSelection={handleToggleSelection}
                 onToggleOpen={handleToggleOpen}
                 onToggleAll={handleToggleAll}
@@ -1121,19 +1299,19 @@ export default function App() {
             {/* Main Area: Preview & Output */}
             <Panel defaultSize={75} minSize={30}>
               <WorkAreaPanel
-                openTabs={openTabs}
-                activeTabId={activeTabId}
-                onTabClick={setActiveTabId}
+                openTabs={activeSession.openTabs}
+                activeTabId={activeSession.activeTabId}
+                onTabClick={handleTabClick}
                 onCloseTab={handleCloseTab}
               >
                 <OutputPanel
-                  generatedText={generatedText}
-                  promptPrefix={promptPrefix}
-                  onPromptPrefixChange={setPromptPrefix}
-                  promptSuffix={promptSuffix}
-                  onPromptSuffixChange={setPromptSuffix}
+                  generatedText={activeSession.generatedText}
+                  promptPrefix={activeSession.promptPrefix}
+                  onPromptPrefixChange={(txt) => updateActiveSession(() => ({ promptPrefix: txt }))}
+                  promptSuffix={activeSession.promptSuffix}
+                  onPromptSuffixChange={(txt) => updateActiveSession(() => ({ promptSuffix: txt }))}
                   onCopy={handleCopy}
-                  copySuccess={copySuccess}
+                  copySuccess={activeSession.copySuccess}
                 />
               </WorkAreaPanel>
             </Panel>
