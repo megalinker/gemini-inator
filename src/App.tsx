@@ -1,5 +1,3 @@
-//--- File: src/App.tsx ---
-
 import React, { useState, useCallback, useMemo, useRef, useEffect, ReactNode } from 'react';
 import {
   LucideFolder, LucideX, LucideFile, LucideChevronDown, LucideChevronRight,
@@ -30,9 +28,10 @@ import kotlin from 'react-syntax-highlighter/dist/esm/languages/prism/kotlin';
 import protobuf from 'react-syntax-highlighter/dist/esm/languages/prism/protobuf';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
+import solidity from 'react-syntax-highlighter/dist/esm/languages/prism/solidity';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 
-const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql, yaml, };
+const languagesToRegister = { jsx, javascript, typescript, python, rust, css, scss, json, markdown, toml, xml, c, cpp, qml, java, kotlin, protobuf, sql, yaml, bash, solidity };
 Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
@@ -328,7 +327,7 @@ const toggleAllFolders = (entries: FileSystemEntry[], isOpen: boolean): FileSyst
 const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsupported' => {
   const extension = filename.split('.').pop()?.toLowerCase() || '';
   const codeExtensions = [
-    'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'mdx', 'py', 'rs', 'xml', 'prisma', 'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql', 'yaml', 'yml', 'lock', 'sum', 'sh',
+    'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'mdx', 'py', 'rs', 'xml', 'prisma', 'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql', 'yaml', 'yml', 'lock', 'sum', 'sh', 'sol'
   ];
   if (codeExtensions.includes(extension)) return 'code';
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) return 'image';
@@ -340,6 +339,7 @@ const getLanguageForPreview = (filename: string): string => {
   const extension = filename.split('.').pop()?.toLowerCase() || '';
   switch (extension) {
     case 'sh': return 'bash';
+    case 'sol': return 'solidity';
     case 'js': return 'javascript';
     case 'ts': return 'typescript';
     case 'py': return 'python';
