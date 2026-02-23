@@ -77,6 +77,19 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
     p.endsWith('.huskyrc.json') || p.endsWith('.huskyrc.ts'),
 };
 
+const getActiveFilterFns = (activeFilters: Set<string>) => {
+  return Array.from(activeFilters)
+    .map(name => COMMON_EXCLUSIONS[name])
+    .filter((fn): fn is (path: string) => boolean => typeof fn === 'function');
+};
+
+const createSessionId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 // Helper types/funcs
 interface FileSystemEntry {
   id: string;
@@ -176,7 +189,7 @@ const loadAndInsertChildren = async (
   if (!entryToLoad || entryToLoad.kind !== 'directory') return baseTree;
 
   const rawChildren = await processDirectoryLevel(entryToLoad.handle as FileSystemDirectoryHandle, entryToLoad.path);
-  const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
+  const filterFns = getActiveFilterFns(activeFilters);
 
   const processedChildren = rawChildren.map(child => {
     const isFiltered = filterFns.some(fn => fn(child.path));
@@ -209,7 +222,7 @@ const applyFiltersAndPreserveOpenState = (
   activeFilters: Set<string>,
   includeOverrides: Set<string>
 ): FileSystemEntry[] => {
-  const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
+  const filterFns = getActiveFilterFns(activeFilters);
   const hasActiveFilters = activeFilters.size > 0;
   const isPathFiltered = (p: string) => filterFns.some(fn => fn(p));
 
@@ -948,7 +961,12 @@ export default function App() {
       const savedFilters = window.localStorage.getItem(FILTERS_STORAGE_KEY);
       if (savedFilters) {
         const parsed = JSON.parse(savedFilters);
-        if (Array.isArray(parsed)) return new Set(parsed);
+        if (Array.isArray(parsed)) {
+          const validFilters = parsed.filter(
+            (name): name is string => typeof name === 'string' && typeof COMMON_EXCLUSIONS[name] === 'function'
+          );
+          return new Set(validFilters);
+        }
       }
     } catch (e) { console.error(e); }
     return new Set();
@@ -978,7 +996,7 @@ export default function App() {
   }, [activeFilters]);
 
   const createNewSession = async (directoryHandle: FileSystemDirectoryHandle) => {
-    const id = crypto.randomUUID();
+    const id = createSessionId();
     const tree = await processDirectoryLevel(directoryHandle);
     const processedTree = applyFiltersAndPreserveOpenState(tree, activeFilters, new Set());
 
@@ -1135,7 +1153,7 @@ export default function App() {
   // ... (Keep buildCompleteTree) ...
   const buildCompleteTree = async (nodes: FileSystemEntry[], activeFilters: Set<string>, includeOverrides: Set<string>): Promise<FileSystemEntry[]> => {
     const newNodes: FileSystemEntry[] = [];
-    const filterFns = Array.from(activeFilters).map(name => COMMON_EXCLUSIONS[name]);
+    const filterFns = getActiveFilterFns(activeFilters);
     for (const node of nodes) {
       const isFiltered = filterFns.some(fn => fn(node.path));
       if (node.kind === 'file') {
