@@ -7,7 +7,7 @@ import {
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-// ... (Language imports - keep these exactly as they were) ...
+// Language imports
 import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
@@ -36,7 +36,7 @@ Object.entries(languagesToRegister).forEach(([name, lang]) => {
   SyntaxHighlighter.registerLanguage(name, lang);
 });
 
-// ... (COMMON_EXCLUSIONS - keep exactly as they were) ...
+// COMMON_EXCLUSIONS
 const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'Node Modules': (path: string) => path === 'node_modules' || path.startsWith('node_modules/'),
   'Dist/Build': (path: string) => ['dist', 'build'].some(dir => path === dir || path.startsWith(`${dir}/`)),
@@ -49,7 +49,6 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
   'DFINITY/ICP': (path: string) => (path === '.dfx' || path.startsWith('.dfx/')) || (path === '.mops' || path.startsWith('.mops/')) || path.endsWith('dfx.json') || path.endsWith('canister_ids.json') || path.endsWith('mops.toml'),
   'JS/TS Config': (path: string) => (path === 'public' || path.startsWith('public/')) || path.endsWith('package.json') || path.endsWith('tsconfig.json') || path.endsWith('vite.config.ts') || path.includes('.env'),
   'Lock Files': (path: string) => path.endsWith('package-lock.json') || path.endsWith('yarn.lock'),
-  'Markdown': (path: string) => path.toLowerCase().endsWith('.md'),
   'Compressed Files': (path: string) => ['.rar', '.zip'].some(ext => path.toLowerCase().endsWith(ext)),
   'Image Files': (path: string) => ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp'].some(ext => path.toLowerCase().endsWith(ext)),
   'Next.js Build (.next/out)': (p) =>
@@ -78,7 +77,7 @@ const COMMON_EXCLUSIONS: Record<string, (path: string) => boolean> = {
     p.endsWith('.huskyrc.json') || p.endsWith('.huskyrc.ts'),
 };
 
-// ... (Helper types/funcs - keep exactly as they were) ...
+// Helper types/funcs
 interface FileSystemEntry {
   id: string;
   name: string;
@@ -110,7 +109,6 @@ interface WorkAreaPanelProps {
   children: ReactNode;
 }
 
-// --- NEW TYPES FOR MULTI-SESSION ---
 interface ProjectSession {
   id: string;
   name: string;
@@ -327,7 +325,7 @@ const toggleAllFolders = (entries: FileSystemEntry[], isOpen: boolean): FileSyst
 const getPreviewType = (filename: string): 'code' | 'image' | 'video' | 'unsupported' => {
   const extension = filename.split('.').pop()?.toLowerCase() || '';
   const codeExtensions = [
-    'js', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'mdx', 'py', 'rs', 'xml', 'prisma', 'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql', 'yaml', 'yml', 'lock', 'sum', 'sh', 'sol'
+    'js', 'mjs', 'ts', 'tsx', 'jsx', 'json', 'html', 'css', 'scss', 'md', 'mdx', 'py', 'rs', 'xml', 'prisma', 'c', 'cpp', 'h', 'qml', 'qrc', 'mo', 'toml', 'txt', 'java', 'kt', 'kts', 'proto', 'gradle', 'move', 'sql', 'yaml', 'yml', 'lock', 'sum', 'sh', 'sol'
   ];
   if (codeExtensions.includes(extension)) return 'code';
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) return 'image';
@@ -341,6 +339,7 @@ const getLanguageForPreview = (filename: string): string => {
     case 'sh': return 'bash';
     case 'sol': return 'solidity';
     case 'js': return 'javascript';
+    case 'mjs': return 'javascript';
     case 'ts': return 'typescript';
     case 'py': return 'python';
     case 'rs': return 'rust';
