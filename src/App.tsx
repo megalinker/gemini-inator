@@ -193,9 +193,9 @@ const loadAndInsertChildren = async (
 
   const processedChildren = rawChildren.map(child => {
     const isFiltered = filterFns.some(fn => fn(child.path));
-    // `indeterminate` is also used as a lazy-loading hint when filters are active.
-    // Use explicit parent selection so newly loaded children are not incorrectly deselected.
-    const parentSelected = entryToLoad.selected;
+    // If a parent is indeterminate, it still represents a partially-included branch.
+    // Newly loaded descendants should remain visible/selected unless explicitly filtered.
+    const parentSelected = entryToLoad.selected || !!entryToLoad.indeterminate;
     const overridden = includeOverrides.has(child.id);
     return {
       ...child,
