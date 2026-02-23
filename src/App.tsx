@@ -180,11 +180,13 @@ const loadAndInsertChildren = async (
 
   const processedChildren = rawChildren.map(child => {
     const isFiltered = filterFns.some(fn => fn(child.path));
-    const parentFullySelected = entryToLoad.selected && !entryToLoad.indeterminate;
+    // `indeterminate` is also used as a lazy-loading hint when filters are active.
+    // Use explicit parent selection so newly loaded children are not incorrectly deselected.
+    const parentSelected = entryToLoad.selected;
     const overridden = includeOverrides.has(child.id);
     return {
       ...child,
-      selected: overridden ? true : (parentFullySelected && !isFiltered),
+      selected: overridden ? true : (parentSelected && !isFiltered),
     };
   });
 
